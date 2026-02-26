@@ -416,7 +416,7 @@ class SettingsTabView(QWidget):
         # Update active provider combo
         self.active_provider_combo.addItem(name)
 
-    def add_mcp_provider(self, name, url, enabled=True, transport="HTTP"):
+    def add_mcp_provider(self, name, url, enabled=True, transport="streamablehttp"):
         """Add an MCP provider to the table"""
         row_count = self.mcp_table.rowCount()
         self.mcp_table.insertRow(row_count)

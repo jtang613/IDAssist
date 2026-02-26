@@ -48,7 +48,7 @@ class MCPConnectionManager:
         self._state = ConnectionState()
         self._lock = threading.RLock()
         self._tools_cache_ttl = 60.0  # 60 seconds
-        self._connection_retry_delay = 30.0  # 30 seconds
+        self._connection_retry_delay = 5.0  # 5 seconds between retry attempts
 
 
     def is_available(self) -> bool:

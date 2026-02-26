@@ -104,7 +104,7 @@ class SettingsService:
                         name TEXT UNIQUE NOT NULL,
                         url TEXT NOT NULL,
                         enabled BOOLEAN DEFAULT 1,
-                        transport TEXT DEFAULT 'HTTP',
+                        transport TEXT DEFAULT 'streamablehttp',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -571,7 +571,7 @@ class SettingsService:
 
     # MCP Provider Operations
 
-    def add_mcp_provider(self, name: str, url: str, enabled: bool = True, transport: str = 'HTTP') -> int:
+    def add_mcp_provider(self, name: str, url: str, enabled: bool = True, transport: str = 'streamablehttp') -> int:
         """Add a new MCP provider"""
         with self._db_lock:
             conn = self._get_connection()

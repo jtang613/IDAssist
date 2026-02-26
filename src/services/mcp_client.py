@@ -78,8 +78,38 @@ class MCPConnection:
             return True
 
         except Exception as e:
+            # Clean up any partially-entered context managers so that
+            # the async generators are closed inside the current task
+            # (prevents "cancel scope in a different task" errors).
+            await self._cleanup_contexts()
             log.log_error(f"Failed to connect to MCP server {self.config.name}: {e}")
             raise MCPConnectionError(f"Connection failed: {e}")
+
+    async def _cleanup_contexts(self):
+        """Exit any entered context managers (session, transport) safely."""
+        if self.session:
+            try:
+                await self.session.__aexit__(None, None, None)
+            except Exception:
+                pass
+            self.session = None
+
+        if self._sse_context:
+            try:
+                await self._sse_context.__aexit__(None, None, None)
+            except Exception:
+                pass
+            self._sse_context = None
+
+        if self._streamablehttp_context:
+            try:
+                await self._streamablehttp_context.__aexit__(None, None, None)
+            except Exception:
+                pass
+            self._streamablehttp_context = None
+
+        self.read = None
+        self.write = None
 
     async def _connect_sse(self):
         """Connect using SSE transport."""
@@ -89,36 +119,19 @@ class MCPConnection:
         if not SSE_CLIENT_AVAILABLE:
             raise MCPError("SSE client not available in MCP SDK. Try updating MCP: pip install --upgrade mcp")
 
+        # Create SSE client connection
+        self._sse_context = sse_client(self.config.url, timeout=self.config.timeout)
+        self.read, self.write = await self._sse_context.__aenter__()
+
+        # Create and initialize session
+        self.session = ClientSession(self.read, self.write)
+        await self.session.__aenter__()
+
+        # Initialize with timeout
         try:
-            # Create SSE client connection
-            self._sse_context = sse_client(self.config.url, timeout=self.config.timeout)
-            self.read, self.write = await self._sse_context.__aenter__()
-
-            # Create and initialize session
-            self.session = ClientSession(self.read, self.write)
-            await self.session.__aenter__()
-
-            # Initialize with timeout
-            try:
-                await asyncio.wait_for(self.session.initialize(), timeout=self.config.timeout)
-            except asyncio.TimeoutError:
-                raise MCPError(f"Session initialization timed out after {self.config.timeout} seconds")
-
-        except Exception as e:
-            log.log_error(f"Failed to connect SSE to {self.config.name}: {e}")
-
-            # Provide more helpful error messages
-            error_msg = str(e).lower()
-            if "404" in error_msg:
-                raise MCPError(f"MCP server not found at {self.config.url}. Check the URL and ensure the MCP server is running.")
-            elif "connection" in error_msg and "refused" in error_msg:
-                raise MCPError(f"Connection refused to {self.config.url}. Ensure the MCP server is running and accessible.")
-            elif "timeout" in error_msg:
-                raise MCPError(f"Connection timeout to {self.config.url}. Server may be slow or unreachable.")
-            elif "taskgroup" in error_msg or "unhandled errors" in error_msg:
-                raise MCPError(f"MCP protocol error connecting to {self.config.url}. Server may not support MCP or is misconfigured.")
-            else:
-                raise MCPError(f"Failed to connect to SSE server: {e}")
+            await asyncio.wait_for(self.session.initialize(), timeout=self.config.timeout)
+        except asyncio.TimeoutError:
+            raise MCPError(f"Session initialization timed out after {self.config.timeout} seconds")
 
     async def _connect_streamablehttp(self):
         """Connect using Streamable HTTP transport."""
@@ -128,35 +141,20 @@ class MCPConnection:
         if not STREAMABLEHTTP_CLIENT_AVAILABLE:
             raise MCPError("Streamable HTTP client not available in MCP SDK. Try updating MCP: pip install --upgrade mcp")
 
+        # Create Streamable HTTP client connection
+        self._streamablehttp_context = streamablehttp_client(self.config.url, timeout=self.config.timeout)
+        # Streamable HTTP returns (read, write, session_id)
+        self.read, self.write, _ = await self._streamablehttp_context.__aenter__()
+
+        # Create and initialize session
+        self.session = ClientSession(self.read, self.write)
+        await self.session.__aenter__()
+
+        # Initialize with timeout
         try:
-            # Create Streamable HTTP client connection
-            self._streamablehttp_context = streamablehttp_client(self.config.url, timeout=self.config.timeout)
-            # Streamable HTTP returns (read, write, session_id)
-            self.read, self.write, _ = await self._streamablehttp_context.__aenter__()
-
-            # Create and initialize session
-            self.session = ClientSession(self.read, self.write)
-            await self.session.__aenter__()
-
-            # Initialize with timeout
-            try:
-                await asyncio.wait_for(self.session.initialize(), timeout=self.config.timeout)
-            except asyncio.TimeoutError:
-                raise MCPError(f"Session initialization timed out after {self.config.timeout} seconds")
-
-        except Exception as e:
-            log.log_error(f"Failed to connect via Streamable HTTP to {self.config.name}: {e}")
-
-            # Provide more helpful error messages
-            error_msg = str(e).lower()
-            if "404" in error_msg:
-                raise MCPError(f"MCP server not found at {self.config.url}. Check the URL and ensure the MCP server is running.")
-            elif "connection" in error_msg and "refused" in error_msg:
-                raise MCPError(f"Connection refused to {self.config.url}. Ensure the MCP server is running and accessible.")
-            elif "timeout" in error_msg:
-                raise MCPError(f"Connection timeout to {self.config.url}. Server may be slow or unreachable.")
-            else:
-                raise MCPError(f"Failed to connect to Streamable HTTP server: {e}")
+            await asyncio.wait_for(self.session.initialize(), timeout=self.config.timeout)
+        except asyncio.TimeoutError:
+            raise MCPError(f"Session initialization timed out after {self.config.timeout} seconds")
 
     async def _discover_capabilities(self):
         """Discover server capabilities."""
@@ -269,29 +267,13 @@ class MCPConnection:
             raise MCPResourceError(f"Resource access failed: {e}")
 
     async def disconnect(self):
-        """Disconnect from the server."""
-        if self.connected:
-            try:
-                if self.session:
-                    await self.session.__aexit__(None, None, None)
-                    self.session = None
-
-                # Clean up transport contexts
-                if self._sse_context:
-                    await self._sse_context.__aexit__(None, None, None)
-                    self._sse_context = None
-
-                if self._streamablehttp_context:
-                    await self._streamablehttp_context.__aexit__(None, None, None)
-                    self._streamablehttp_context = None
-
-                self.read = None
-                self.write = None
-
-            except Exception as e:
-                log.log_warn(f"Error during disconnect: {e}")
-            finally:
-                self.connected = False
+        """Disconnect from the server and clean up all contexts."""
+        try:
+            await self._cleanup_contexts()
+        except Exception as e:
+            log.log_warn(f"Error during disconnect: {e}")
+        finally:
+            self.connected = False
 
 
 class MCPClient:

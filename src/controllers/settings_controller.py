@@ -992,7 +992,10 @@ class MCPProviderDialog(QDialog):
             self.name_edit.setText(self.provider_data.get('name', ''))
             self.url_edit.setText(self.provider_data.get('url', ''))
 
-            transport_value = self.provider_data.get('transport', 'sse')
+            raw_transport = self.provider_data.get('transport', 'sse').lower().strip()
+            # Normalize legacy transport values
+            transport_map = {'http': 'streamablehttp', 'streamable_http': 'streamablehttp'}
+            transport_value = transport_map.get(raw_transport, raw_transport)
             index = self.transport_combo.findData(transport_value)
             if index >= 0:
                 self.transport_combo.setCurrentIndex(index)
