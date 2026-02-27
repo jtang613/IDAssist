@@ -84,16 +84,20 @@ Enable the **MCP** checkbox to let the LLM invoke tools during response generati
 4. Tool calls and results appear inline in the conversation
 5. The LLM incorporates tool results into its final answer
 
-**Available built-in tools** (via IDAssist's MCP server on port 8765):
+**Available built-in tools:**
 
 | Tool | What It Does |
 |------|-------------|
-| `ida_get_function_name` | Look up a function's name by address |
-| `ida_get_disassembly` | Get disassembly at an address |
-| `ida_get_pseudocode` | Get Hex-Rays decompilation |
-| `ida_get_xrefs` | Get cross-references to/from an address |
-| `ida_set_function_name` | Rename a function |
-| `ida_add_comment` | Add a comment at an address |
+| `decompile_function` | Get Hex-Rays decompiled pseudocode |
+| `get_disassembly` | Get disassembly listing for a function |
+| `get_xrefs` | Get cross-references to/from an address |
+| `navigate_to` | Move IDA cursor to an address |
+| `rename_function` | Rename a function |
+| `rename_variable` | Rename a local variable |
+| `get_function_list` | List functions in the binary |
+| `get_strings` | Get string references |
+| `graph_query` | Query the semantic knowledge graph |
+| `search_graph` | Full-text search the knowledge graph |
 
 External MCP servers configured in Settings provide additional tools.
 

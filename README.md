@@ -47,7 +47,7 @@ Configure reasoning effort levels to control how much the LLM "thinks" before re
 
 ### MCP Integration
 
-IDAssist includes a built-in MCP (Model Context Protocol) server and can connect to external MCP servers. This enables tool-augmented LLM interactions where the model can programmatically inspect functions, read disassembly, query cross-references, and modify the IDB during reasoning.
+IDAssist can connect to external MCP servers for tool-augmented LLM interactions where the model can programmatically inspect functions, read disassembly, query cross-references, and modify the IDB during reasoning. IDAssist also provides built-in internal tools for function calling without requiring an external MCP server.
 
 ### Function Calling
 
@@ -64,7 +64,7 @@ IDAssist follows an MVC (Model-View-Controller) pattern:
 - **Views** (`src/views/`) — PySide6 tab widgets that emit signals on user interaction
 - **Controllers** (`src/controllers/`) — Connect view signals to service calls, manage state
 - **Services** (`src/services/`) — Business logic, LLM providers, database access, graph analysis
-- **MCP Server** (`src/mcp_server/`) — Built-in SSE server exposing IDA functionality as MCP tools
+- **MCP Tools** (`src/mcp_server/`) — Internal tool definitions and handlers for IDA functionality
 
 Key design principles:
 - All IDA API calls execute on the main thread via `execute_on_main_thread()`
@@ -117,24 +117,8 @@ IDAssist supports the following provider types:
 | Provider | Model | Strengths |
 |----------|-------|-----------|
 | Anthropic | `claude-sonnet-4-6` | Strong code analysis, extended thinking |
-| OpenAI | `gpt-4o` | Fast, good general analysis |
-| OpenAI | `o1` | Deep reasoning with extended thinking |
+| OpenAI | `gpt-5.3-codex` | Fast, good general analysis |
 | Ollama | `qwen2.5-coder:32b` | Local, no API key needed |
-
-## Using the Built-in MCP Server
-
-IDAssist runs an MCP server on **port 8765** (SSE transport) that exposes IDA functionality as tools. External LLM clients can connect to `http://localhost:8765/sse` to use these tools:
-
-| Tool | Description |
-|------|-------------|
-| `ida_get_function_name` | Get function name at address |
-| `ida_get_disassembly` | Get disassembly snippet |
-| `ida_get_pseudocode` | Get Hex-Rays decompilation |
-| `ida_get_xrefs` | Get cross-references |
-| `ida_set_function_name` | Rename a function |
-| `ida_add_comment` | Add comment at address |
-
-Resources are also available: `binary/info`, `binary/functions`, `function/{address}`.
 
 ## Using the Semantic Graph
 

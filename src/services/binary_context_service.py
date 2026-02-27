@@ -39,6 +39,15 @@ class ViewLevel(Enum):
     PSEUDO_C = "pseudo_c"
 
 
+# Module-level tracked view level (updated by UI hooks when IDA code views gain focus)
+_tracked_view_level = None
+
+def set_tracked_view_level(level):
+    """Called by UI hooks when a code view (disassembly or pseudocode) gains focus."""
+    global _tracked_view_level
+    _tracked_view_level = level
+
+
 class BinaryContextService:
     """Service for extracting context-aware information from IDA Pro"""
 
@@ -283,11 +292,15 @@ class BinaryContextService:
             widget = ida_kernwin.get_current_widget()
             if widget:
                 wtype = ida_kernwin.get_widget_type(widget)
-                # BWN_PSEUDOCODE = 0x22 (pseudocode/decompiler view)
                 if wtype == ida_kernwin.BWN_PSEUDOCODE:
                     return ViewLevel.PSEUDO_C
+                elif wtype == ida_kernwin.BWN_DISASM:
+                    return ViewLevel.ASM
         except Exception:
             pass
+        # Fall back to last tracked code view (set by UI hooks)
+        if _tracked_view_level is not None:
+            return _tracked_view_level
         return ViewLevel.ASM
 
     def get_code_at_level(self, address: int, view_level: ViewLevel, context_lines: int = 5) -> Dict[str, Any]:

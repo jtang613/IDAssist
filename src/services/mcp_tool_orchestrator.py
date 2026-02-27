@@ -18,6 +18,7 @@ from .models.mcp_models import MCPToolExecutionRequest
 from .binary_context_service import BinaryContextService
 
 from src.ida_compat import log
+from src.mcp_server.tools import INTERNAL_TOOL_DEFINITIONS, execute_internal_tool
 
 
 class MCPToolOrchestrator:
@@ -30,6 +31,9 @@ class MCPToolOrchestrator:
     - Aggregate and format results for LLM continuation
     - Inject binary context into tool arguments when needed
     """
+
+    # Names of tools handled locally (not via external MCP servers)
+    _INTERNAL_TOOL_NAMES = frozenset(d["name"] for d in INTERNAL_TOOL_DEFINITIONS)
 
     def __init__(self, mcp_service: MCPClientService, binary_context_service: Optional[BinaryContextService] = None):
         self.mcp_service = mcp_service
@@ -185,6 +189,20 @@ class MCPToolOrchestrator:
         start_time = time.time()
 
         try:
+            # Check if this is an internal tool (graph_query, search_graph, etc.)
+            # Internal tools are only used when no external server provides them
+            if (tool_call.name in self._INTERNAL_TOOL_NAMES
+                    and tool_call.name not in self._tool_server_map):
+                log.log_info(f"Executing internal tool: {tool_call.name}")
+                result_text = execute_internal_tool(tool_call.name, tool_call.arguments)
+                execution_time = time.time() - start_time
+                return ToolResult(
+                    tool_call_id=tool_call.id,
+                    content=result_text,
+                    execution_time=execution_time,
+                    server_name="__internal__"
+                )
+
             # Find which server handles this tool
             server_name = self._tool_server_map.get(tool_call.name)
             if not server_name:
@@ -193,6 +211,18 @@ class MCPToolOrchestrator:
                 server_name = self._tool_server_map.get(tool_call.name)
 
             if not server_name:
+                # Last resort: check if it's a known internal tool name
+                if tool_call.name in self._INTERNAL_TOOL_NAMES:
+                    log.log_info(f"Falling back to internal tool: {tool_call.name}")
+                    result_text = execute_internal_tool(tool_call.name, tool_call.arguments)
+                    execution_time = time.time() - start_time
+                    return ToolResult(
+                        tool_call_id=tool_call.id,
+                        content=result_text,
+                        execution_time=execution_time,
+                        server_name="__internal__"
+                    )
+
                 error_msg = f"No server found for tool '{tool_call.name}'"
                 log.log_error(error_msg)
                 return ToolResult(

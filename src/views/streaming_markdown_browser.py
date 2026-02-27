@@ -55,7 +55,7 @@ class StreamingMarkdownBrowser(QTextBrowser):
 
         # Track previously rendered HTML for incremental updates
         self._last_rendered_html = ""
-        self._committed_html = ""  # Track committed HTML separately for RenderUpdate
+        self._committed_html = MARKDOWN_CSS  # Track committed HTML separately for RenderUpdate
         self._pending_start = 0  # Track character position where pending content starts
 
         # Initialize with CSS so content is styled from the start
@@ -182,7 +182,7 @@ class StreamingMarkdownBrowser(QTextBrowser):
     def reset_streaming(self) -> None:
         """Reset streaming state for new content"""
         self._last_rendered_html = ""
-        self._committed_html = ""
+        self._committed_html = MARKDOWN_CSS
         self._pending_start = 0
         # Initialize document with CSS so streaming content is styled
         self.setHtml(MARKDOWN_CSS)

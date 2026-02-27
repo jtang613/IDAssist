@@ -921,11 +921,12 @@ class QueryController:
             # Get MCP tools if enabled
             mcp_tools = []
             if mcp_enabled:
-                if self.mcp_connection_manager.ensure_connections():
-                    mcp_tools = self.mcp_connection_manager.get_available_tools_for_llm()
-                    log.log_info(f"MCP enabled with {len(mcp_tools)} tools available")
-                else:
-                    log.log_warn("MCP enabled but connection failed")
+                # Try to connect to external MCP servers (non-fatal if it fails)
+                self.mcp_connection_manager.ensure_connections()
+                # Always get tools — includes internal tools even if no
+                # external servers are connected
+                mcp_tools = self.mcp_connection_manager.get_available_tools_for_llm()
+                log.log_info(f"MCP enabled with {len(mcp_tools)} tools available")
             
             # Start LLM query thread
             self._start_llm_query(messages, active_provider, mcp_tools)
@@ -2796,12 +2797,9 @@ Tool Usage Guidelines:
             initial_context = self._format_initial_context_for_react(context)
 
             # MCP tools are required for agentic mode
-            mcp_tools = []
-            if self.mcp_connection_manager.ensure_connections():
-                mcp_tools = self.mcp_connection_manager.get_available_tools_for_llm()
-                log.log_info(f"Agentic mode with {len(mcp_tools)} tools available")
-            else:
-                log.log_warn("MCP connection failed for agentic mode")
+            self.mcp_connection_manager.ensure_connections()
+            mcp_tools = self.mcp_connection_manager.get_available_tools_for_llm()
+            log.log_info(f"Agentic mode with {len(mcp_tools)} tools available")
 
             # Create provider instance
             provider = self.llm_factory.create_provider(active_provider)

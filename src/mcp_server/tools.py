@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 """
-IDAssist MCP Tools
+IDAssist Internal Tools
 
-IDA-specific MCP tools exposed to external LLM clients.
-All tools that modify the IDB use execute_on_main_thread().
+IDA-specific tool definitions and handlers used by the Actions tab
+and tool orchestrator. All tools that modify the IDB use execute_on_main_thread().
 """
 
 from typing import Any, Dict, List
@@ -13,8 +13,7 @@ import json
 from src.ida_compat import log, execute_on_main_thread
 
 try:
-    from mcp.server import Server
-    from mcp.types import Tool, TextContent
+    from mcp.types import TextContent
     _MCP_AVAILABLE = True
 except ImportError:
     _MCP_AVAILABLE = False
@@ -34,215 +33,174 @@ except ImportError:
     _IN_IDA = False
 
 
-def register_tools(server: 'Server'):
-    """Register all IDA-specific MCP tools."""
-    if not _MCP_AVAILABLE:
-        return
+INTERNAL_TOOL_DEFINITIONS = [
+    {
+        "name": "decompile_function",
+        "description": "Get Hex-Rays decompiled pseudo-C output for a function",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "address": {"type": "string", "description": "Function address (hex string, e.g. '0x401000')"}
+            },
+            "required": ["address"]
+        }
+    },
+    {
+        "name": "get_disassembly",
+        "description": "Get disassembly listing for a function",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "address": {"type": "string", "description": "Function address (hex string)"}
+            },
+            "required": ["address"]
+        }
+    },
+    {
+        "name": "get_xrefs",
+        "description": "Get cross-references to/from an address",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "address": {"type": "string", "description": "Address to find xrefs for (hex string)"},
+                "direction": {"type": "string", "enum": ["to", "from", "both"], "description": "Direction of cross-references", "default": "both"}
+            },
+            "required": ["address"]
+        }
+    },
+    {
+        "name": "navigate_to",
+        "description": "Move IDA cursor to a specific address",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "address": {"type": "string", "description": "Address to navigate to (hex string)"}
+            },
+            "required": ["address"]
+        }
+    },
+    {
+        "name": "rename_function",
+        "description": "Rename a function in IDA",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "address": {"type": "string", "description": "Function address (hex string)"},
+                "new_name": {"type": "string", "description": "New name for the function"}
+            },
+            "required": ["address", "new_name"]
+        }
+    },
+    {
+        "name": "rename_variable",
+        "description": "Rename a local variable in a decompiled function",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "function_address": {"type": "string", "description": "Function address (hex string)"},
+                "old_name": {"type": "string", "description": "Current variable name"},
+                "new_name": {"type": "string", "description": "New variable name"}
+            },
+            "required": ["function_address", "old_name", "new_name"]
+        }
+    },
+    {
+        "name": "get_function_list",
+        "description": "List all functions in the binary",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "filter": {"type": "string", "description": "Optional name filter (substring match)"},
+                "limit": {"type": "integer", "description": "Maximum number of functions to return", "default": 100}
+            }
+        }
+    },
+    {
+        "name": "get_strings",
+        "description": "Get string references from the binary",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "min_length": {"type": "integer", "description": "Minimum string length", "default": 4},
+                "limit": {"type": "integer", "description": "Maximum number of strings to return", "default": 100}
+            }
+        }
+    },
+    {
+        "name": "graph_query",
+        "description": "Query the semantic knowledge graph for the current binary (requires indexing first via Semantic Graph tab)",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural language query about the binary"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "search_graph",
+        "description": "Full-text search the semantic knowledge graph for functions and relationships",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "limit": {"type": "integer", "description": "Maximum results", "default": 20}
+            },
+            "required": ["query"]
+        }
+    },
+]
 
-    @server.list_tools()
-    async def list_tools() -> List[Tool]:
-        return [
-            Tool(
-                name="decompile_function",
-                description="Get Hex-Rays decompiled pseudo-C output for a function",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "address": {
-                            "type": "string",
-                            "description": "Function address (hex string, e.g. '0x401000')"
-                        }
-                    },
-                    "required": ["address"]
-                }
-            ),
-            Tool(
-                name="get_disassembly",
-                description="Get disassembly listing for a function",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "address": {
-                            "type": "string",
-                            "description": "Function address (hex string)"
-                        }
-                    },
-                    "required": ["address"]
-                }
-            ),
-            Tool(
-                name="get_xrefs",
-                description="Get cross-references to/from an address",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "address": {
-                            "type": "string",
-                            "description": "Address to find xrefs for (hex string)"
-                        },
-                        "direction": {
-                            "type": "string",
-                            "enum": ["to", "from", "both"],
-                            "description": "Direction of cross-references",
-                            "default": "both"
-                        }
-                    },
-                    "required": ["address"]
-                }
-            ),
-            Tool(
-                name="navigate_to",
-                description="Move IDA cursor to a specific address",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "address": {
-                            "type": "string",
-                            "description": "Address to navigate to (hex string)"
-                        }
-                    },
-                    "required": ["address"]
-                }
-            ),
-            Tool(
-                name="rename_function",
-                description="Rename a function in IDA",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "address": {
-                            "type": "string",
-                            "description": "Function address (hex string)"
-                        },
-                        "new_name": {
-                            "type": "string",
-                            "description": "New name for the function"
-                        }
-                    },
-                    "required": ["address", "new_name"]
-                }
-            ),
-            Tool(
-                name="rename_variable",
-                description="Rename a local variable in a decompiled function",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "function_address": {
-                            "type": "string",
-                            "description": "Function address (hex string)"
-                        },
-                        "old_name": {
-                            "type": "string",
-                            "description": "Current variable name"
-                        },
-                        "new_name": {
-                            "type": "string",
-                            "description": "New variable name"
-                        }
-                    },
-                    "required": ["function_address", "old_name", "new_name"]
-                }
-            ),
-            Tool(
-                name="get_function_list",
-                description="List all functions in the binary",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "filter": {
-                            "type": "string",
-                            "description": "Optional name filter (substring match)"
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum number of functions to return",
-                            "default": 100
-                        }
-                    }
-                }
-            ),
-            Tool(
-                name="get_strings",
-                description="Get string references from the binary",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "min_length": {
-                            "type": "integer",
-                            "description": "Minimum string length",
-                            "default": 4
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum number of strings to return",
-                            "default": 100
-                        }
-                    }
-                }
-            ),
-            Tool(
-                name="graph_query",
-                description="Query the knowledge graph (requires indexing first)",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Natural language query about the binary"
-                        }
-                    },
-                    "required": ["query"]
-                }
-            ),
-            Tool(
-                name="search_graph",
-                description="Full-text search the knowledge graph",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query"
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum results",
-                            "default": 20
-                        }
-                    },
-                    "required": ["query"]
-                }
-            ),
-        ]
+# Map of internal tool names to their implementation functions
+_INTERNAL_TOOL_HANDLERS = {}
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-        try:
-            if name == "decompile_function":
-                return _decompile_function(arguments)
-            elif name == "get_disassembly":
-                return _get_disassembly(arguments)
-            elif name == "get_xrefs":
-                return _get_xrefs(arguments)
-            elif name == "navigate_to":
-                return _navigate_to(arguments)
-            elif name == "rename_function":
-                return _rename_function(arguments)
-            elif name == "rename_variable":
-                return _rename_variable(arguments)
-            elif name == "get_function_list":
-                return _get_function_list(arguments)
-            elif name == "get_strings":
-                return _get_strings(arguments)
-            elif name == "graph_query":
-                return _graph_query(arguments)
-            elif name == "search_graph":
-                return _search_graph(arguments)
-            else:
-                return [TextContent(type="text", text=f"Unknown tool: {name}")]
-        except Exception as e:
-            return [TextContent(type="text", text=f"Error: {str(e)}")]
+
+def get_internal_tools_for_llm(exclude_names=None):
+    """Return internal tool definitions in OpenAI tool-calling format.
+
+    Args:
+        exclude_names: set of tool names to skip (e.g. tools already
+                       provided by an external MCP server).
+    """
+    exclude = exclude_names or set()
+    tools = []
+    for defn in INTERNAL_TOOL_DEFINITIONS:
+        if defn["name"] in exclude:
+            continue
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": defn["name"],
+                "description": defn["description"],
+                "parameters": defn["schema"],
+            }
+        })
+    return tools
+
+
+def execute_internal_tool(name: str, arguments: Dict[str, Any]) -> str:
+    """Execute an internal tool by name and return the result as a string."""
+    handlers = {
+        "decompile_function": _decompile_function,
+        "get_disassembly": _get_disassembly,
+        "get_xrefs": _get_xrefs,
+        "navigate_to": _navigate_to,
+        "rename_function": _rename_function,
+        "rename_variable": _rename_variable,
+        "get_function_list": _get_function_list,
+        "get_strings": _get_strings,
+        "graph_query": _graph_query,
+        "search_graph": _search_graph,
+    }
+    handler = handlers.get(name)
+    if not handler:
+        return f"Unknown internal tool: {name}"
+    try:
+        result_parts = handler(arguments)
+        # result_parts is List[TextContent] — extract text
+        return "\n".join(part.text if hasattr(part, 'text') else str(part) for part in result_parts)
+    except Exception as e:
+        return f"Error executing {name}: {e}"
 
 
 def _parse_address(addr_str: str) -> int:

@@ -12,6 +12,7 @@ class SettingsTabView(QWidget):
     # Signals for controller communication
     llm_provider_add_requested = Signal()
     llm_provider_edit_requested = Signal(int)  # row index
+    llm_provider_duplicate_requested = Signal(int)  # row index
     llm_provider_delete_requested = Signal(int)  # row index
     llm_provider_test_requested = Signal(int)  # row index
     llm_active_provider_changed = Signal(str)  # provider name
@@ -19,6 +20,7 @@ class SettingsTabView(QWidget):
 
     mcp_provider_add_requested = Signal()
     mcp_provider_edit_requested = Signal(int)  # row index
+    mcp_provider_duplicate_requested = Signal(int)  # row index
     mcp_provider_delete_requested = Signal(int)  # row index
     mcp_provider_test_requested = Signal(int)  # row index
 
@@ -97,16 +99,19 @@ class SettingsTabView(QWidget):
         llm_buttons_layout = QHBoxLayout()
         self.llm_add_button = QPushButton("Add")
         self.llm_edit_button = QPushButton("Edit")
+        self.llm_duplicate_button = QPushButton("Duplicate")
         self.llm_delete_button = QPushButton("Delete")
         self.llm_test_button = QPushButton("Test")
 
         self.llm_add_button.clicked.connect(self.llm_provider_add_requested.emit)
         self.llm_edit_button.clicked.connect(self.on_llm_edit_clicked)
+        self.llm_duplicate_button.clicked.connect(self.on_llm_duplicate_clicked)
         self.llm_delete_button.clicked.connect(self.on_llm_delete_clicked)
         self.llm_test_button.clicked.connect(self.on_llm_test_clicked)
 
         llm_buttons_layout.addWidget(self.llm_add_button)
         llm_buttons_layout.addWidget(self.llm_edit_button)
+        llm_buttons_layout.addWidget(self.llm_duplicate_button)
         llm_buttons_layout.addWidget(self.llm_delete_button)
         llm_buttons_layout.addWidget(self.llm_test_button)
 
@@ -180,16 +185,19 @@ class SettingsTabView(QWidget):
         mcp_buttons_layout = QHBoxLayout()
         self.mcp_add_button = QPushButton("Add")
         self.mcp_edit_button = QPushButton("Edit")
+        self.mcp_duplicate_button = QPushButton("Duplicate")
         self.mcp_delete_button = QPushButton("Delete")
         self.mcp_test_button = QPushButton("Test")
 
         self.mcp_add_button.clicked.connect(self.mcp_provider_add_requested.emit)
         self.mcp_edit_button.clicked.connect(self.on_mcp_edit_clicked)
+        self.mcp_duplicate_button.clicked.connect(self.on_mcp_duplicate_clicked)
         self.mcp_delete_button.clicked.connect(self.on_mcp_delete_clicked)
         self.mcp_test_button.clicked.connect(self.on_mcp_test_clicked)
 
         mcp_buttons_layout.addWidget(self.mcp_add_button)
         mcp_buttons_layout.addWidget(self.mcp_edit_button)
+        mcp_buttons_layout.addWidget(self.mcp_duplicate_button)
         mcp_buttons_layout.addWidget(self.mcp_delete_button)
         mcp_buttons_layout.addWidget(self.mcp_test_button)
 
@@ -435,6 +443,11 @@ class SettingsTabView(QWidget):
         if current_row >= 0:
             self.llm_provider_edit_requested.emit(current_row)
 
+    def on_llm_duplicate_clicked(self):
+        current_row = self.llm_table.currentRow()
+        if current_row >= 0:
+            self.llm_provider_duplicate_requested.emit(current_row)
+
     def on_llm_delete_clicked(self):
         current_row = self.llm_table.currentRow()
         if current_row >= 0:
@@ -449,6 +462,11 @@ class SettingsTabView(QWidget):
         current_row = self.mcp_table.currentRow()
         if current_row >= 0:
             self.mcp_provider_edit_requested.emit(current_row)
+
+    def on_mcp_duplicate_clicked(self):
+        current_row = self.mcp_table.currentRow()
+        if current_row >= 0:
+            self.mcp_provider_duplicate_requested.emit(current_row)
 
     def on_mcp_delete_clicked(self):
         current_row = self.mcp_table.currentRow()

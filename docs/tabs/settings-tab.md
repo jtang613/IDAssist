@@ -14,8 +14,8 @@ Lists all configured LLM providers:
 
 | Column | Description |
 |--------|-------------|
-| **Name** | Unique provider name (e.g., "Claude", "GPT-4o"). |
-| **Model** | Model identifier (e.g., `claude-sonnet-4-6`, `gpt-4o`). |
+| **Name** | Unique provider name (e.g., "Claude", "GPT-5.3"). |
+| **Model** | Model identifier (e.g., `claude-sonnet-4-6`, `gpt-5.3-codex`). |
 | **Type** | Provider type (see table below). |
 | **URL** | API endpoint URL. |
 | **Max Tokens** | Maximum tokens for requests. |
@@ -92,8 +92,6 @@ When adding or editing a provider:
 | **Edit** | Modify the selected MCP server's settings. |
 | **Delete** | Remove the selected MCP server. |
 | **Test** | Verify connectivity to the MCP server. |
-
-> **Note:** IDAssist also runs its own built-in MCP server on port 8765 (SSE transport). This is separate from the external MCP servers configured here.
 
 ## SymGraph
 

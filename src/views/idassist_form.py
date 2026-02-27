@@ -42,6 +42,20 @@ class IDAssistUIHooks(ida_kernwin.UI_Hooks):
             except Exception as e:
                 log.log_error(f"UI hook listener error: {e}")
 
+    def current_widget_changed(self, widget, prev_widget):
+        """Track which IDA code view was last active."""
+        try:
+            if widget:
+                wtype = ida_kernwin.get_widget_type(widget)
+                if wtype == ida_kernwin.BWN_PSEUDOCODE:
+                    from src.services.binary_context_service import set_tracked_view_level, ViewLevel
+                    set_tracked_view_level(ViewLevel.PSEUDO_C)
+                elif wtype == ida_kernwin.BWN_DISASM:
+                    from src.services.binary_context_service import set_tracked_view_level, ViewLevel
+                    set_tracked_view_level(ViewLevel.ASM)
+        except Exception:
+            pass
+
 
 class IDAssistForm(idaapi.PluginForm):
     """Singleton dockable form hosting the IDAssist tab widget."""

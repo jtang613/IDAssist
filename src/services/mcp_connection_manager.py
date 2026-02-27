@@ -17,6 +17,7 @@ from .mcp_client_service import MCPClientService
 from .models.mcp_models import MCPTool
 
 from src.ida_compat import log
+from src.mcp_server.tools import get_internal_tools_for_llm
 
 
 @dataclass
@@ -65,36 +66,50 @@ class MCPConnectionManager:
         """
         Get MCP tools formatted for LLM consumption.
 
+        Combines internal tools (graph_query, search_graph, etc.) with
+        external tools from connected MCP servers.  When an external server
+        provides a tool with the same name as an internal tool, the external
+        version takes precedence (it is typically more featureful).
+
         Returns:
             List of tool definitions in OpenAI tool calling format.
-            Returns empty list if not connected or no tools available.
         """
         with self._lock:
             # Check if we have cached tools that are still fresh
             current_time = time.time()
             cache_age = current_time - self._state.tools_cached_at
 
-            if self._state.connected and cache_age < self._tools_cache_ttl:
+            if self._state.tools and cache_age < self._tools_cache_ttl:
                 return self._state.tools.copy()
 
-            # Cache is stale or we're not connected
-            if not self._state.connected:
-                return []
+            # Collect external tools from connected MCP servers
+            external_tools = []
+            if self._state.connected:
+                try:
+                    raw_tools = self._mcp_service.get_available_tools()
+                    external_tools = self._convert_tools_for_llm(raw_tools)
+                except Exception as e:
+                    log.log_error(f"Failed to get external MCP tools: {e}")
+                    self._state.error_message = str(e)
 
-            # Refresh tools cache
-            try:
-                # Get raw MCP tools and convert to LLM format
-                raw_tools = self._mcp_service.get_available_tools()
-                tools = self._convert_tools_for_llm(raw_tools)
-                self._state.tools = tools
-                self._state.tools_cached_at = current_time
-                log.log_info(f"Refreshed MCP tools cache: {len(tools)} tools available")
-                return tools.copy()
+            # Names already covered by external servers
+            external_names = {
+                t["function"]["name"]
+                for t in external_tools
+                if "function" in t and "name" in t["function"]
+            }
 
-            except Exception as e:
-                log.log_error(f"Failed to refresh MCP tools cache: {e}")
-                self._state.error_message = str(e)
-                return []
+            # Add internal tools that are NOT already provided externally
+            internal_tools = get_internal_tools_for_llm(exclude_names=external_names)
+
+            tools = external_tools + internal_tools
+            self._state.tools = tools
+            self._state.tools_cached_at = current_time
+            log.log_info(
+                f"Refreshed MCP tools cache: {len(external_tools)} external + "
+                f"{len(internal_tools)} internal = {len(tools)} total"
+            )
+            return tools.copy()
 
     def ensure_connections(self) -> bool:
         """

@@ -557,13 +557,10 @@ class ExplainController:
             return []
 
         try:
-            if self.mcp_connection_manager.ensure_connections():
-                tools = self.mcp_connection_manager.get_available_tools_for_llm()
-                log.log_info(f"MCP enabled with {len(tools)} tools available for Explain")
-                return tools
-            else:
-                log.log_warn("MCP enabled but connection failed")
-                return []
+            self.mcp_connection_manager.ensure_connections()
+            tools = self.mcp_connection_manager.get_available_tools_for_llm()
+            log.log_info(f"MCP enabled with {len(tools)} tools available for Explain")
+            return tools
         except Exception as e:
             log.log_error(f"Failed to get MCP tools: {e}")
             return []

@@ -28,7 +28,7 @@ IDAssist organizes its functionality into seven tabs:
 
 ### MCP Tool Integration
 
-IDAssist includes a built-in MCP server (port 8765, SSE transport) that exposes IDA functionality — function lookup, disassembly, pseudocode, cross-references, renaming, and commenting — as tools that LLMs can invoke during reasoning. You can also connect to external MCP servers for additional tool capabilities.
+IDAssist provides built-in internal tools — function lookup, disassembly, pseudocode, cross-references, renaming, and graph queries — that LLMs can invoke during reasoning via function calling. You can also connect to external MCP servers for additional tool capabilities.
 
 ### ReAct Agent
 
@@ -76,8 +76,7 @@ Push symbols (function names, variables, types) and graph data to the SymGraph p
 | Provider | Model | Notes |
 |----------|-------|-------|
 | Anthropic | `claude-sonnet-4-6` | Best balance of speed and quality |
-| OpenAI | `gpt-4o` | Fast general analysis |
-| OpenAI | `o1` | Extended thinking for complex code |
+| OpenAI | `gpt-5.3-codex` | Fast general analysis |
 | Ollama | `qwen2.5-coder:32b` | Fully local, no API key |
 
 ## Architecture Overview
@@ -94,7 +93,7 @@ src/
 │   ├── graphrag/           # Knowledge graph services
 │   ├── streaming/          # Streaming response rendering
 │   └── ...
-└── mcp_server/             # Built-in MCP server (SSE)
+└── mcp_server/             # Internal tool definitions and handlers
 ```
 
 - **Views** emit Qt signals on user interaction
