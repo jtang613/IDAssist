@@ -116,7 +116,7 @@ class SemanticGraphController:
         self.view.list_view.set_summary(node.llm_summary or "")
 
         self.view.graph_view.show_content()
-        self.handle_visual_refresh(self.view.graph_view.n_hops.value(), ["calls", "references", "calls_vulnerable", "network_send", "network_recv"])
+        self.handle_visual_refresh(self.view.graph_view.n_hops.value(), self.view.graph_view.get_selected_edge_types())
 
     def handle_go(self, text: str):
         addr = self._resolve_address(text)
@@ -495,6 +495,7 @@ class SemanticGraphController:
         visited = {center_id}
         queue = [(center_id, 0)]
         all_edges = []
+        seen_edge_keys = set()
 
         while queue and len(visited) < max_nodes:
             node_id, depth = queue.pop(0)
@@ -503,6 +504,16 @@ class SemanticGraphController:
             for edge in self.graph_store.get_edges_for_node(binary_hash, node_id):
                 if edge_types and edge.edge_type not in edge_types:
                     continue
+                edge_key = (edge.source_id, edge.target_id, edge.edge_type)
+                if edge_key in seen_edge_keys:
+                    # Skip duplicate (same edge seen from the other endpoint)
+                    neighbor = edge.target_id if edge.source_id == node_id else edge.source_id
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        if len(visited) < max_nodes:
+                            queue.append((neighbor, depth + 1))
+                    continue
+                seen_edge_keys.add(edge_key)
                 all_edges.append(edge)
                 neighbor = edge.target_id if edge.source_id == node_id else edge.source_id
                 if neighbor in visited:
@@ -542,6 +553,8 @@ class SemanticGraphController:
             "label": label,
             "summary": node.llm_summary or "",
             "has_vuln": bool(node.security_flags),
+            "risk_level": node.risk_level or "",
+            "security_flags": node.security_flags or [],
         }
 
     def _node_to_result(self, node) -> Dict[str, Any]:
