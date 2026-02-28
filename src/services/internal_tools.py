@@ -8,7 +8,6 @@ and tool orchestrator. All tools that modify the IDB use execute_on_main_thread(
 """
 
 from typing import Any, Dict, List
-import json
 
 from src.ida_compat import log, execute_on_main_thread
 
@@ -126,33 +125,7 @@ INTERNAL_TOOL_DEFINITIONS = [
             }
         }
     },
-    {
-        "name": "graph_query",
-        "description": "Query the semantic knowledge graph for the current binary (requires indexing first via Semantic Graph tab)",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Natural language query about the binary"}
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "search_graph",
-        "description": "Full-text search the semantic knowledge graph for functions and relationships",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"},
-                "limit": {"type": "integer", "description": "Maximum results", "default": 20}
-            },
-            "required": ["query"]
-        }
-    },
 ]
-
-# Map of internal tool names to their implementation functions
-_INTERNAL_TOOL_HANDLERS = {}
 
 
 def get_internal_tools_for_llm(exclude_names=None):
@@ -189,8 +162,6 @@ def execute_internal_tool(name: str, arguments: Dict[str, Any]) -> str:
         "rename_variable": _rename_variable,
         "get_function_list": _get_function_list,
         "get_strings": _get_strings,
-        "graph_query": _graph_query,
-        "search_graph": _search_graph,
     }
     handler = handlers.get(name)
     if not handler:
@@ -330,25 +301,10 @@ def _rename_variable(args: Dict) -> List['TextContent']:
 
     def _do():
         try:
-            cfunc = ida_hexrays.decompile(func_ea)
-            if not cfunc:
-                result_holder[1] = "Decompilation failed"
-                return
-
-            lvars = cfunc.get_lvars()
-            target = None
-            for lvar in lvars:
-                if lvar.name == old_name:
-                    target = lvar
-                    break
-
-            if not target:
-                result_holder[1] = f"Variable '{old_name}' not found"
-                return
-
-            result_holder[0] = ida_hexrays.rename_lvar(cfunc, target, new_name)
+            # rename_lvar(ea_t, oldname, newname) -> bool
+            result_holder[0] = ida_hexrays.rename_lvar(func_ea, old_name, new_name)
             if not result_holder[0]:
-                result_holder[1] = "rename_lvar failed"
+                result_holder[1] = f"rename_lvar failed (variable '{old_name}' may not exist)"
         except Exception as e:
             result_holder[1] = str(e)
 
@@ -397,54 +353,3 @@ def _get_strings(args: Dict) -> List['TextContent']:
 
     header = f"Strings ({len(strings)} shown):\n"
     return [TextContent(type="text", text=header + "\n".join(strings))]
-
-
-def _graph_query(args: Dict) -> List['TextContent']:
-    """Query the knowledge graph."""
-    try:
-        from src.services.graphrag.graphrag_service import GraphRAGService
-        from src.services.analysis_db_service import AnalysisDBService
-        from src.ida_compat import get_binary_hash
-
-        analysis_db = AnalysisDBService()
-        graphrag = GraphRAGService.get_instance(analysis_db)
-        binary_hash = get_binary_hash()
-
-        if not binary_hash:
-            return [TextContent(type="text", text="No binary loaded")]
-
-        result = graphrag.query(binary_hash, args["query"])
-        return [TextContent(type="text", text=result or "No results found")]
-    except Exception as e:
-        return [TextContent(type="text", text=f"Graph query error: {str(e)}")]
-
-
-def _search_graph(args: Dict) -> List['TextContent']:
-    """Full-text search the knowledge graph."""
-    try:
-        from src.services.graphrag.graph_store import GraphStore
-        from src.services.analysis_db_service import AnalysisDBService
-        from src.ida_compat import get_binary_hash
-
-        analysis_db = AnalysisDBService()
-        graph_store = GraphStore(analysis_db.get_db_path())
-        binary_hash = get_binary_hash()
-
-        if not binary_hash:
-            return [TextContent(type="text", text="No binary loaded")]
-
-        limit = args.get("limit", 20)
-        results = graph_store.search(binary_hash, args["query"], limit=limit)
-
-        if not results:
-            return [TextContent(type="text", text="No search results found")]
-
-        lines = [f"Search results for '{args['query']}':"]
-        for node in results:
-            lines.append(f"  0x{node.address:08x}  {node.name}")
-            if node.summary:
-                lines.append(f"    Summary: {node.summary[:100]}...")
-
-        return [TextContent(type="text", text="\n".join(lines))]
-    except Exception as e:
-        return [TextContent(type="text", text=f"Search error: {str(e)}")]

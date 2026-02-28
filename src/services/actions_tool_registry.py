@@ -118,6 +118,11 @@ class ActionsToolRegistry:
                 execution_time=execution_time
             )
 
+    def set_view_level(self, view_level):
+        """Set the view level for the current analysis session."""
+        for tool in self.tools.values():
+            tool.set_view_level(view_level)
+
     def clear_suggestions(self):
         """Clear all accumulated suggestions"""
         suggestion_count = len(self.active_suggestions)

@@ -8,7 +8,7 @@ Follows the same patterns as ExplainController and QueryController.
 """
 
 from typing import Optional, Dict, Any, List
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal, Qt
 from src.services.binary_context_service import BinaryContextService, ViewLevel
 from src.services.actions_service import ActionsService
 from src.services.settings_service import SettingsService
@@ -18,7 +18,15 @@ from src.services.models.action_models import ActionType, ActionProposal, Action
 from src.services.models.llm_models import ToolCall
 from .actions_llm_thread import ActionsLLMThread, ActionsToolExecutorThread
 
-from src.ida_compat import log, get_binary_hash
+from src.ida_compat import log, get_binary_hash, execute_on_main_thread
+
+# IDA imports for view refresh
+try:
+    import ida_kernwin
+    import ida_hexrays
+    _IN_IDA = True
+except ImportError:
+    _IN_IDA = False
 
 
 class ActionsApplyThread(QThread):
@@ -119,6 +127,7 @@ class ActionsApplyThread(QThread):
                 confidence=0.8,
                 rationale="User-selected action from table"
             )
+            proposal.view_level = action_data.get('view_level')
 
             return proposal
 
@@ -213,6 +222,7 @@ class ActionsController:
             # Get code at current view level
             current_offset = context["offset"]
             current_view_level = self.context_service.get_current_view_level()
+            effective_view_level = current_view_level  # Track what actually worked
             code_data = self.context_service.get_code_at_level(current_offset, current_view_level)
 
             # Try fallback levels if current level fails
@@ -222,6 +232,7 @@ class ActionsController:
                     if level != current_view_level:
                         code_data = self.context_service.get_code_at_level(current_offset, level)
                         if not code_data.get("error"):
+                            effective_view_level = level  # Update to fallback level
                             log.log_info(f"Fallback level {level.value} succeeded")
                             break
 
@@ -230,6 +241,11 @@ class ActionsController:
                 log.log_error(error_msg)
                 self._set_busy_state(False, "Code extraction failed")
                 return
+
+            # Track effective view level and propagate to tools
+            self._last_analysis_view_level = effective_view_level.value
+            self.actions_tool_registry.set_view_level(effective_view_level.value)
+            log.log_info(f"Analysis view level: {effective_view_level.value}")
 
             # Clear the tool registry to get fresh suggestions for this analysis
             # (UI table keeps previous suggestions, registry gets new ones)
@@ -423,6 +439,11 @@ class ActionsController:
                         status,
                         confidence
                     )
+                    # Store view_level as hidden data on the description cell
+                    row_idx = self.view.proposed_actions_table.rowCount() - 1
+                    desc_item = self.view.proposed_actions_table.item(row_idx, 2)
+                    if desc_item:
+                        desc_item.setData(Qt.UserRole, proposal.view_level)
                     added_count += 1
                     existing_descriptions.add(description)  # Track this addition
 
@@ -468,6 +489,7 @@ class ActionsController:
                 confidence=0.8,
                 rationale="User-selected action from table"
             )
+            proposal.view_level = action_data.get('view_level')
 
             return proposal
 
@@ -499,6 +521,10 @@ class ActionsController:
         try:
             log.log_info(f"Action application completed: {applied_count} success, {failed_count} failed")
 
+            # Refresh IDA views so changes are visible immediately
+            if applied_count > 0:
+                self._refresh_ida_views()
+
             # Clear busy state and apply flag
             self.apply_active = False
             self._set_busy_state(False, f"Applied {applied_count} actions")
@@ -522,6 +548,29 @@ class ActionsController:
                 self.view.set_busy_state(busy, message)
         except Exception as e:
             log.log_error(f"Error setting busy state: {e}")
+
+    def _refresh_ida_views(self):
+        """Refresh IDA disassembly and pseudocode views to reflect applied changes"""
+        if not _IN_IDA:
+            return
+
+        def _do_refresh():
+            try:
+                # Refresh the active disassembly view
+                ida_kernwin.refresh_idaview_anyway()
+
+                # Refresh any open pseudocode (decompiler) views
+                for suffix in "ABCDEFGH":
+                    widget = ida_kernwin.find_widget(f"Pseudocode-{suffix}")
+                    if widget:
+                        vu = ida_hexrays.get_widget_vdui(widget)
+                        if vu:
+                            vu.refresh_view(True)
+            except Exception as e:
+                log.log_error(f"Error refreshing IDA views: {e}")
+
+        execute_on_main_thread(_do_refresh)
+        log.log_info("Refreshed IDA views")
 
     def _mark_actions_as_applying(self, selected_actions: List[Dict[str, Any]]):
         """Mark selected actions as 'Applying...' in the UI"""

@@ -1,6 +1,7 @@
 # Semantic Graph Tab Reference
 
 <!-- SCREENSHOT: Semantic Graph tab showing the visual graph view with function nodes and call edges -->
+![Screenshot](/docs/screenshots/semantic_graph_tab.png)
 
 ## Purpose
 

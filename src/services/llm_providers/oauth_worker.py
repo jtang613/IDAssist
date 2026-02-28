@@ -408,3 +408,166 @@ class AnthropicOAuthWorker(OAuthWorkerBase):
             # Always stop the server
             await self._server.stop()
             self._server = None
+
+
+class GeminiOAuthWorker(OAuthWorkerBase):
+    """
+    Worker for Google Gemini OAuth authentication with automatic callback.
+
+    Runs the complete OAuth flow in a background thread:
+    1. Starts callback server
+    2. Opens browser (NO PKCE for browser mode, just state)
+    3. Waits for callback
+    4. Exchanges code for tokens (with client_secret)
+    5. Fetches user info and sets up Code Assist project
+    """
+
+    def run(self):
+        """Run the Gemini OAuth authentication."""
+        try:
+            from .oauth_gemini_utils import (
+                generate_state, build_browser_auth_url,
+                exchange_code_for_tokens, fetch_user_info,
+                setup_user, create_credentials_json,
+                OAUTH_CALLBACK_PATH, OAUTH_CALLBACK_PORTS
+            )
+            from .oauth_callback_server import OAuthCallbackServer
+            import webbrowser
+
+            self.status_update.emit("Starting authentication server...")
+            log.log_info("Gemini OAuth worker started")
+
+            if self._cancelled:
+                self.authentication_failed.emit("cancelled")
+                return
+
+            # Run the async authentication with cancellation support
+            tokens = self._run_async(
+                self._authenticate_gemini(
+                    generate_state, build_browser_auth_url,
+                    exchange_code_for_tokens, fetch_user_info,
+                    setup_user, create_credentials_json,
+                    OAuthCallbackServer, webbrowser,
+                    OAUTH_CALLBACK_PATH, OAUTH_CALLBACK_PORTS
+                )
+            )
+
+            if self._cancelled:
+                self.authentication_failed.emit("cancelled")
+                return
+
+            if tokens is None:
+                self.authentication_failed.emit("cancelled")
+                return
+
+            # Check for errors
+            if isinstance(tokens, dict) and tokens.get("error"):
+                error_msg = tokens.get('error_description', tokens['error'])
+                log.log_error(f"Gemini OAuth error: {error_msg}")
+                self.authentication_failed.emit(error_msg)
+                return
+
+            log.log_info("Gemini OAuth authentication completed successfully")
+            self.authentication_complete.emit(tokens)
+
+        except asyncio.TimeoutError:
+            log.log_warn("Gemini OAuth timeout")
+            self.authentication_failed.emit("timeout")
+        except asyncio.CancelledError:
+            log.log_info("Gemini OAuth cancelled")
+            self.authentication_failed.emit("cancelled")
+        except RuntimeError as e:
+            log.log_warn(f"Gemini OAuth server error: {e}")
+            self.authentication_failed.emit(f"server_error:{e}")
+        except Exception as e:
+            log.log_error(f"Gemini OAuth error: {e}")
+            self.authentication_failed.emit(str(e))
+
+    async def _authenticate_gemini(self, generate_state, build_browser_auth_url,
+                                    exchange_code_for_tokens, fetch_user_info,
+                                    setup_user, create_credentials_json,
+                                    OAuthCallbackServer, webbrowser,
+                                    callback_path, callback_ports):
+        """
+        Internal async method for Gemini OAuth with cancellation support.
+
+        Browser mode: NO PKCE, just state parameter for CSRF protection.
+        Token exchange includes client_secret (form-encoded).
+        """
+        # Generate state (NO PKCE for browser mode)
+        state = generate_state()
+
+        # Create callback server and store reference for cancellation
+        self._server = OAuthCallbackServer(
+            callback_path=callback_path,
+            ports=callback_ports,
+            timeout=self.timeout,
+            provider_name="Google Gemini"
+        )
+
+        try:
+            # Start server and get redirect URI
+            redirect_uri, port = await self._server.start()
+            log.log_info(f"OAuth callback server started on port {port}")
+
+            if self._cancelled:
+                return None
+
+            # Build and open authorization URL (NO PKCE)
+            auth_url = build_browser_auth_url(state, redirect_uri)
+            log.log_info("Opening browser for Gemini authentication")
+            webbrowser.open(auth_url)
+
+            # Wait for callback
+            log.log_info("Waiting for OAuth callback...")
+            self.status_update.emit("Waiting for authentication in browser...")
+            callback_params = await self._server.wait_for_callback()
+
+            if self._cancelled:
+                return None
+
+            # Validate state parameter
+            received_state = callback_params.get('state', '')
+            if received_state != state:
+                log.log_warn("State mismatch in Gemini OAuth callback (CSRF protection)")
+
+            # Extract authorization code
+            code = callback_params.get('code')
+            if not code:
+                raise Exception("No authorization code in callback")
+
+            log.log_info("Received authorization code, exchanging for tokens...")
+            self.status_update.emit("Exchanging code for tokens...")
+
+            # Exchange code for tokens (NO code_verifier for browser mode)
+            tokens = await exchange_code_for_tokens(code, redirect_uri)
+
+            if tokens.get("error"):
+                return tokens
+
+            # Fetch user info
+            self.status_update.emit("Setting up account...")
+            email = await fetch_user_info(tokens["access_token"])
+
+            # Setup Code Assist (project discovery)
+            user_info = await setup_user(tokens["access_token"])
+
+            # Create credentials JSON
+            credentials_json = create_credentials_json(
+                tokens,
+                email=email,
+                project_id=user_info.get("project_id", ""),
+                tier=user_info.get("tier", ""),
+                tier_name=user_info.get("tier_name", ""),
+            )
+
+            return {
+                'credentials_json': credentials_json,
+                'tokens': tokens,
+                'email': email,
+            }
+
+        finally:
+            # Always stop the server
+            await self._server.stop()
+            self._server = None

@@ -156,15 +156,27 @@ class LLMProviderFactory:
         except ImportError:
             pass  # OpenAI OAuth provider not available
 
-        # OpenAI Platform API provider (handles OpenAI, LM Studio, and OpenWebUI)
+        # OpenAI Platform API provider (handles OpenAI, LM Studio, OpenWebUI, X.ai, Gemini Platform)
         try:
             from .openai_platform_api_provider import OpenAIPlatformApiProviderFactory
             openai_factory = OpenAIPlatformApiProviderFactory()
             self.register_factory(ProviderType.OPENAI_PLATFORM, openai_factory)
             self.register_factory(ProviderType.LMSTUDIO, openai_factory)
             self.register_factory(ProviderType.OPENWEBUI, openai_factory)
+            self.register_factory(ProviderType.XAI_PLATFORM, openai_factory)
+            self.register_factory(ProviderType.GEMINI_PLATFORM, openai_factory)
         except ImportError:
             pass  # OpenAI Platform API provider not available
+
+        # Gemini OAuth provider (Gemini CLI subscription)
+        try:
+            from .gemini_oauth_provider import GeminiOAuthProviderFactory
+            self.register_factory(
+                ProviderType.GEMINI_OAUTH,
+                GeminiOAuthProviderFactory()
+            )
+        except ImportError:
+            pass  # Gemini OAuth provider not available
 
 
 class AnthropicPlatformApiProviderFactory(ProviderFactory):

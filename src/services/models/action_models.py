@@ -26,6 +26,7 @@ class ActionProposal:
     proposed_value: str  # Proposed new name/type
     confidence: float  # 0.0 to 1.0
     rationale: str  # Why this change is suggested
+    view_level: Optional[str] = None  # "assembly" or "pseudo_c"
 
 
 @dataclass

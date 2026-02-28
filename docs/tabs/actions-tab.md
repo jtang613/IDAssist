@@ -1,6 +1,7 @@
 # Actions Tab Reference
 
 <!-- SCREENSHOT: Actions tab showing proposed renames with confidence scores and apply buttons -->
+![Screenshot](/docs/screenshots/actions_tab.png)
 
 ## Purpose
 

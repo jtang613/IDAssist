@@ -32,6 +32,11 @@ class SettingsTabView(QWidget):
     symgraph_api_key_changed = Signal(str)
     symgraph_test_requested = Signal()
 
+    # Cancel signals for test buttons
+    llm_test_cancel_requested = Signal()
+    mcp_test_cancel_requested = Signal()
+    symgraph_test_cancel_requested = Signal()
+
     def __init__(self):
         super().__init__()
         self.setup_ui()
@@ -315,36 +320,71 @@ class SettingsTabView(QWidget):
         self._set_test_status(self.llm_test_status, status, tooltip)
 
     def set_llm_test_enabled(self, enabled: bool):
-        """Enable or disable the LLM test button"""
-        self.llm_test_button.setEnabled(enabled)
+        """Toggle the LLM test button between Test and Cancel modes"""
         if not enabled:
-            self.llm_test_button.setText("Testing...")
+            # Testing in progress - show Cancel
+            self.llm_test_button.setText("Cancel")
+            self.llm_test_button.setEnabled(True)
+            try:
+                self.llm_test_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+            self.llm_test_button.clicked.connect(self.llm_test_cancel_requested.emit)
         else:
+            # Test done - restore Test
             self.llm_test_button.setText("Test")
+            self.llm_test_button.setEnabled(True)
+            try:
+                self.llm_test_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+            self.llm_test_button.clicked.connect(self.on_llm_test_clicked)
 
     def set_mcp_test_status(self, status: str, tooltip: str = ""):
         """Set the MCP Server test status indicator"""
         self._set_test_status(self.mcp_test_status, status, tooltip)
 
     def set_mcp_test_enabled(self, enabled: bool):
-        """Enable or disable the MCP test button"""
-        self.mcp_test_button.setEnabled(enabled)
+        """Toggle the MCP test button between Test and Cancel modes"""
         if not enabled:
-            self.mcp_test_button.setText("Testing...")
+            self.mcp_test_button.setText("Cancel")
+            self.mcp_test_button.setEnabled(True)
+            try:
+                self.mcp_test_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+            self.mcp_test_button.clicked.connect(self.mcp_test_cancel_requested.emit)
         else:
             self.mcp_test_button.setText("Test")
+            self.mcp_test_button.setEnabled(True)
+            try:
+                self.mcp_test_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+            self.mcp_test_button.clicked.connect(self.on_mcp_test_clicked)
 
     def set_symgraph_test_status(self, status: str, tooltip: str = ""):
         """Set the SymGraph test status indicator"""
         self._set_test_status(self.symgraph_test_status, status, tooltip)
 
     def set_symgraph_test_enabled(self, enabled: bool):
-        """Enable or disable the SymGraph test button"""
-        self.symgraph_test_button.setEnabled(enabled)
+        """Toggle the SymGraph test button between Test and Cancel modes"""
         if not enabled:
-            self.symgraph_test_button.setText("Testing...")
+            self.symgraph_test_button.setText("Cancel")
+            self.symgraph_test_button.setEnabled(True)
+            try:
+                self.symgraph_test_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+            self.symgraph_test_button.clicked.connect(self.symgraph_test_cancel_requested.emit)
         else:
             self.symgraph_test_button.setText("Test")
+            self.symgraph_test_button.setEnabled(True)
+            try:
+                self.symgraph_test_button.clicked.disconnect()
+            except RuntimeError:
+                pass
+            self.symgraph_test_button.clicked.connect(self.symgraph_test_requested.emit)
 
     def create_system_prompt_section(self, parent_layout):
         group_box = QGroupBox("System Prompt")

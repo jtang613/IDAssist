@@ -3,6 +3,7 @@
 Welcome to the IDAssist documentation. This guide covers installation, configuration, and usage of IDAssist — an AI-powered reverse engineering plugin for IDA Pro.
 
 <!-- SCREENSHOT: IDAssist main interface with the Explain tab active -->
+![Screenshot](/docs/screenshots/main_interface.png)
 
 ## What is IDAssist?
 
@@ -21,7 +22,6 @@ IDAssist organizes its functionality into seven tabs:
 | **[Actions](tabs/actions-tab.md)** | AI-powered rename and retype suggestions with confidence scores |
 | **[Semantic Graph](tabs/semantic-graph-tab.md)** | Knowledge graph with visual explorer, search, and community detection |
 | **[RAG](tabs/rag-tab.md)** | Upload reference documents for context-enriched analysis |
-| **SymGraph** | Push/pull symbols and graph data to the SymGraph collaborative platform (configured in [Settings](tabs/settings-tab.md)) |
 | **[Settings](tabs/settings-tab.md)** | Configure LLM providers, MCP servers, SymGraph credentials, system prompt, and database paths |
 
 ## Key Features
@@ -54,10 +54,6 @@ Build a searchable knowledge graph of the binary's functions, relationships, and
 - Network flow and taint analysis
 - Community detection for module identification
 - Visual graph rendering with Graphviz layout
-
-### SymGraph Cloud Sharing
-
-Push symbols (function names, variables, types) and graph data to the SymGraph platform for team collaboration. Pull from SymGraph with a conflict-resolution wizard that shows new, conflicting, and unchanged symbols side by side.
 
 ## Supported LLM Providers
 

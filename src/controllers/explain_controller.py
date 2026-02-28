@@ -3,7 +3,7 @@
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import asyncio
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal, QTimer
 from src.services.binary_context_service import BinaryContextService, ViewLevel
 from src.services.llm_providers.provider_factory import LLMProviderFactory
 from src.services.settings_service import SettingsService
@@ -72,6 +72,14 @@ class ExplainController:
             on_content=self._streaming_renderer.on_chunk,
             on_thinking_start=self._on_thinking_start,
         )
+
+        # Debounce timer for auto-load on cursor navigation
+        self._autoload_timer = QTimer()
+        self._autoload_timer.setSingleShot(True)
+        self._autoload_timer.setInterval(500)  # 500ms debounce
+        self._autoload_timer.timeout.connect(self._on_autoload_timer)
+        self._pending_autoload_offset = None
+        self._last_autoloaded_func_start = None
 
         # Connect view signals
         self._connect_signals()
@@ -144,14 +152,36 @@ class ExplainController:
             self.context_service.set_binary_hash(binary_hash)
 
     def set_current_offset(self, offset: int):
-        """Update current offset in context service and view"""
+        """Update current offset in context service and view.
+
+        Auto-load of cached analysis is debounced (500ms) and skipped
+        entirely when the cursor stays within the same function.  This
+        prevents a flood of redundant GraphRAG lookups while the user
+        scrolls through the disassembly or pseudocode view.
+        """
         self.context_service.set_current_offset(offset)
         self.view.set_current_offset(f"0x{offset:X}")
 
-        # Auto-load cached analysis for the new offset
-        self._load_cached_analysis_for_offset(offset)
+        # Skip auto-load entirely if we're still in the same function
+        func_start = self._get_function_start_address(offset)
+        if func_start is not None and func_start == self._last_autoloaded_func_start:
+            return
 
-        # Auto-load cached line explanation for the new offset
+        # Debounce: restart the timer on every new offset
+        self._pending_autoload_offset = offset
+        self._autoload_timer.start()
+
+    def _on_autoload_timer(self):
+        """Fired after the debounce interval — safe to auto-load now."""
+        offset = self._pending_autoload_offset
+        if offset is None:
+            return
+
+        # Track current function to avoid redundant reloads
+        func_start = self._get_function_start_address(offset)
+        self._last_autoloaded_func_start = func_start
+
+        self._load_cached_analysis_for_offset(offset)
         self._load_cached_line_explanation_for_offset(offset)
 
     def explain_function(self):
@@ -830,8 +860,8 @@ Analyze the specific instruction/line of code below. Provide a detailed explanat
         self._streaming_renderer.on_stream_complete()
         filtered_content = self._streaming_renderer.get_full_markdown()
 
-        # Update view markdown content for edit mode compatibility
-        self.view.markdown_content = filtered_content
+        # Re-render final content through markdown_to_html so feedback buttons appear
+        self.view.set_explanation_content(filtered_content)
 
         # Reset streaming state for next query
         self._reasoning_filter.reset()

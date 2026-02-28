@@ -598,5 +598,7 @@ class OpenAIPlatformApiProviderFactory(ProviderFactory):
         return provider_type in {
             ProviderType.OPENAI_PLATFORM,
             ProviderType.LMSTUDIO,
-            ProviderType.OPENWEBUI
+            ProviderType.OPENWEBUI,
+            ProviderType.XAI_PLATFORM,
+            ProviderType.GEMINI_PLATFORM,
         }

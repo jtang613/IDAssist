@@ -1,0 +1,30 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "idassist",
+    "entryPoint": "idassist_plugin.py",
+    "version": "1.0.0",
+    "description": "AI-powered reverse engineering plugin with LLM analysis, semantic knowledge graphs, RAG search, and SymGraph collaboration",
+    "license": "MIT",
+    "urls": {
+      "repository": "https://github.com/jtang613/IDAssist"
+    },
+    "authors": [
+      {
+        "name": "Jason Tang"
+      }
+    ],
+    "keywords": ["llm", "ai", "reverse-engineering", "analysis", "knowledge-graph", "symgraph"],
+    "pythonDependencies": [
+      "openai",
+      "anthropic",
+      "pysqlite3",
+      "markdown",
+      "httpx",
+      "anyio>=4.6",
+      "mcp==1.23.3",
+      "whoosh",
+      "aiohttp"
+    ]
+  }
+}

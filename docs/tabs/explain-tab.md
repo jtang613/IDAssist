@@ -1,6 +1,7 @@
 # Explain Tab Reference
 
 <!-- SCREENSHOT: Explain tab showing a function explanation with security analysis panel -->
+![Screenshot](/docs/screenshots/explain_tab.png)
 
 ## Purpose
 

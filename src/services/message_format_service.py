@@ -374,6 +374,9 @@ class MessageFormatService:
             ProviderType.ANTHROPIC_CLI: AnthropicCLIMessageAdapter(),
             ProviderType.ANTHROPIC_OAUTH: anthropic_adapter,  # Same API format as Anthropic Platform
             ProviderType.ANTHROPIC_PLATFORM: anthropic_adapter,
+            # Gemini providers (alphabetically)
+            ProviderType.GEMINI_OAUTH: openai_adapter,  # Storage uses OpenAI format; provider handles Gemini-native conversion
+            ProviderType.GEMINI_PLATFORM: openai_adapter,  # OpenAI-compatible API
             # Local/Proxy providers (alphabetically)
             ProviderType.LITELLM: LiteLLMMessageAdapter(),
             ProviderType.LMSTUDIO: openai_adapter,
@@ -382,6 +385,8 @@ class MessageFormatService:
             # OpenAI providers (alphabetically)
             ProviderType.OPENAI_OAUTH: openai_adapter,  # Responses API uses OpenAI-like format
             ProviderType.OPENAI_PLATFORM: openai_adapter,
+            # xAI provider
+            ProviderType.XAI_PLATFORM: openai_adapter,  # OpenAI-compatible API
         }
 
     def get_adapter(self, provider_type: ProviderType) -> MessageFormatAdapter:

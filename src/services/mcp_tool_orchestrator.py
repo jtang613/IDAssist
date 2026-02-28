@@ -18,7 +18,8 @@ from .models.mcp_models import MCPToolExecutionRequest
 from .binary_context_service import BinaryContextService
 
 from src.ida_compat import log
-from src.mcp_server.tools import INTERNAL_TOOL_DEFINITIONS, execute_internal_tool
+from .internal_tools import INTERNAL_TOOL_DEFINITIONS, execute_internal_tool
+from .graphrag.graphrag_tools import GRAPHRAG_TOOL_NAMES, execute_graphrag_tool
 
 
 class MCPToolOrchestrator:
@@ -33,7 +34,7 @@ class MCPToolOrchestrator:
     """
 
     # Names of tools handled locally (not via external MCP servers)
-    _INTERNAL_TOOL_NAMES = frozenset(d["name"] for d in INTERNAL_TOOL_DEFINITIONS)
+    _INTERNAL_TOOL_NAMES = frozenset(d["name"] for d in INTERNAL_TOOL_DEFINITIONS) | GRAPHRAG_TOOL_NAMES
 
     def __init__(self, mcp_service: MCPClientService, binary_context_service: Optional[BinaryContextService] = None):
         self.mcp_service = mcp_service
@@ -189,7 +190,41 @@ class MCPToolOrchestrator:
         start_time = time.time()
 
         try:
-            # Check if this is an internal tool (graph_query, search_graph, etc.)
+            # Check if this is a graphrag tool (handled before other internal tools)
+            if (tool_call.name in GRAPHRAG_TOOL_NAMES
+                    and tool_call.name not in self._tool_server_map):
+                log.log_info(f"Executing graphrag tool: {tool_call.name}")
+                from src.services.analysis_db_service import AnalysisDBService
+                binary_hash = None
+                if self.binary_context_service:
+                    binary_hash = self.binary_context_service.get_binary_hash()
+                if not binary_hash:
+                    from src.ida_compat import get_binary_hash, execute_on_main_thread
+                    result_holder = [None]
+                    def _do():
+                        result_holder[0] = get_binary_hash()
+                    execute_on_main_thread(_do)
+                    binary_hash = result_holder[0]
+                if not binary_hash:
+                    return ToolResult(
+                        tool_call_id=tool_call.id,
+                        content="No binary loaded — cannot execute graph tool.",
+                        execution_time=time.time() - start_time,
+                        server_name="__graphrag__"
+                    )
+                result_text = execute_graphrag_tool(
+                    tool_call.name, tool_call.arguments,
+                    binary_hash, AnalysisDBService()
+                )
+                execution_time = time.time() - start_time
+                return ToolResult(
+                    tool_call_id=tool_call.id,
+                    content=result_text,
+                    execution_time=execution_time,
+                    server_name="__graphrag__"
+                )
+
+            # Check if this is an internal IDA tool
             # Internal tools are only used when no external server provides them
             if (tool_call.name in self._INTERNAL_TOOL_NAMES
                     and tool_call.name not in self._tool_server_map):

@@ -1,6 +1,7 @@
 # Query Tab Reference
 
 <!-- SCREENSHOT: Query tab showing a chat conversation with context macros and response -->
+![Screenshot](/docs/screenshots/query_tab.png)
 
 ## Purpose
 

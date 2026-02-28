@@ -168,6 +168,18 @@ class IDAssistPopupHooks(ida_kernwin.UI_Hooks):
 # Plugin class
 # ---------------------------------------------------------------------------
 
+class _DeferredOpenHook(ida_kernwin.UI_Hooks):
+    """One-shot hook to open IDAssist panel after IDA's UI is fully ready."""
+
+    def __init__(self, plugin):
+        super().__init__()
+        self._plugin = plugin
+
+    def ready_to_run(self):
+        self._plugin.run(0)
+        self.unhook()
+
+
 class IDAssistPlugin(idaapi.plugin_t):
     """IDA plugin_t implementation for IDAssist."""
 
@@ -181,6 +193,7 @@ class IDAssistPlugin(idaapi.plugin_t):
         super().__init__()
         self._idb_hooks = None
         self._popup_hooks = None
+        self._deferred_hook = None
 
     def init(self):
         """Called when IDA loads the plugin. Return PLUGIN_KEEP to stay resident."""
@@ -199,8 +212,9 @@ class IDAssistPlugin(idaapi.plugin_t):
             self._popup_hooks = IDAssistPopupHooks()
             self._popup_hooks.hook()
 
-            # Auto-open the IDAssist panel
-            self.run(0)
+            # Defer panel open until IDA's UI is fully ready
+            self._deferred_hook = _DeferredOpenHook(self)
+            self._deferred_hook.hook()
 
             return idaapi.PLUGIN_KEEP
         except Exception as e:

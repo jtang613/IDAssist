@@ -1,6 +1,7 @@
 # RAG Tab Reference
 
 <!-- SCREENSHOT: RAG tab showing uploaded documents and a search query with results -->
+![Screenshot](/docs/screenshots/rag_tab.png)
 
 ## Purpose
 

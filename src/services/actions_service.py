@@ -217,6 +217,12 @@ class ActionsService:
             )
 
     def _apply_rename_variable(self, function_address: int, proposal: ActionProposal) -> ActionResult:
+        """Apply variable rename, dispatching by view level"""
+        if proposal.view_level == "assembly":
+            return self._apply_rename_variable_asm(function_address, proposal)
+        return self._apply_rename_variable_pseudocode(function_address, proposal)
+
+    def _apply_rename_variable_pseudocode(self, function_address: int, proposal: ActionProposal) -> ActionResult:
         """Apply variable rename via Hex-Rays API on main thread"""
         try:
             var_name = proposal.target
@@ -230,28 +236,11 @@ class ActionsService:
                         result_holder[1] = f"No function found at address {hex(function_address)}"
                         return
 
-                    cfunc = ida_hexrays.decompile(func.start_ea)
-                    if not cfunc:
-                        result_holder[1] = "Decompilation failed"
-                        return
-
-                    # Find the variable by name in local vars
-                    lvars = cfunc.get_lvars()
-                    target_lvar = None
-                    for lvar in lvars:
-                        if lvar.name == var_name:
-                            target_lvar = lvar
-                            break
-
-                    if not target_lvar:
-                        result_holder[1] = f"Variable '{var_name}' not found"
-                        return
-
-                    # Rename the local variable
-                    success = ida_hexrays.rename_lvar(cfunc, target_lvar, new_name)
+                    # rename_lvar(ea_t, oldname, newname) -> bool
+                    success = ida_hexrays.rename_lvar(func.start_ea, var_name, new_name)
                     result_holder[0] = success
                     if not success:
-                        result_holder[1] = "rename_lvar returned False"
+                        result_holder[1] = f"rename_lvar returned False (variable '{var_name}' may not exist)"
                 except Exception as e:
                     result_holder[1] = str(e)
 
@@ -284,8 +273,74 @@ class ActionsService:
                 error=str(e)
             )
 
+    def _apply_rename_variable_asm(self, function_address: int, proposal: ActionProposal) -> ActionResult:
+        """Apply variable rename via stack frame member rename on main thread"""
+        try:
+            var_name = proposal.target
+            new_name = proposal.proposed_value
+            result_holder = [False, ""]
+
+            def _do_rename():
+                try:
+                    func = ida_funcs.get_func(function_address)
+                    if not func:
+                        result_holder[1] = f"No function at {hex(function_address)}"
+                        return
+                    frame_id = idc.get_frame_id(func.start_ea)
+                    if frame_id is None or frame_id == idc.BADADDR:
+                        result_holder[1] = "No stack frame for this function"
+                        return
+                    # Search frame members by name using idc/idautils
+                    for offset, name, size in idautils.StructMembers(frame_id):
+                        if name == var_name:
+                            success = idc.set_member_name(frame_id, offset, new_name)
+                            result_holder[0] = bool(success)
+                            if not result_holder[0]:
+                                result_holder[1] = f"set_member_name failed for '{var_name}'"
+                            return
+                    result_holder[1] = f"Stack variable '{var_name}' not found in frame"
+                except Exception as e:
+                    result_holder[1] = str(e)
+
+            execute_on_main_thread(_do_rename)
+
+            if result_holder[0]:
+                return ActionResult(
+                    success=True,
+                    message=f"Renamed stack variable '{var_name}' to '{new_name}'",
+                    action_type=proposal.action_type,
+                    target=proposal.target,
+                    old_value=var_name,
+                    new_value=new_name
+                )
+            else:
+                return ActionResult(
+                    success=False,
+                    message=f"Failed to rename stack variable: {result_holder[1]}",
+                    action_type=proposal.action_type,
+                    target=proposal.target,
+                    error=result_holder[1]
+                )
+
+        except Exception as e:
+            return ActionResult(
+                success=False,
+                message=f"Failed to rename stack variable: {str(e)}",
+                action_type=proposal.action_type,
+                target=proposal.target,
+                error=str(e)
+            )
+
     def _apply_retype_variable(self, function_address: int, proposal: ActionProposal) -> ActionResult:
         """Apply variable retype via Hex-Rays + typeinf API on main thread"""
+        if proposal.view_level == "assembly":
+            return ActionResult(
+                success=False,
+                message="Variable retyping is only supported in pseudocode view",
+                action_type=proposal.action_type,
+                target=proposal.target,
+                error="Retype not supported in disassembly view — switch to pseudocode and re-analyze"
+            )
         try:
             var_name = proposal.target
             new_type_str = proposal.proposed_value

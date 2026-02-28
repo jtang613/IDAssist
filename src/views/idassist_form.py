@@ -179,6 +179,7 @@ class IDAssistForm(idaapi.PluginForm):
             self.explain_view = ExplainTabView()
             self.explain_controller = ExplainController(self.explain_view)
             self.tabs.addTab(self.explain_view, "Explain")
+            self.explain_view.rlhf_feedback_requested.connect(self.explain_controller.handle_rlhf_feedback)
 
             # Register for cursor changes
             hooks = self.get_ui_hooks()
@@ -200,6 +201,7 @@ class IDAssistForm(idaapi.PluginForm):
             self.query_view = QueryTabView()
             self.query_controller = QueryController(self.query_view)
             self.tabs.addTab(self.query_view, "Query")
+            self.query_view.rlhf_feedback_requested.connect(self.query_controller.handle_rlhf_feedback)
 
             # Register for cursor changes
             hooks = self.get_ui_hooks()

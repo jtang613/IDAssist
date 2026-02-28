@@ -180,11 +180,13 @@ class ActionsTabView(QWidget):
                 # Find the checkbox within the widget
                 checkbox = checkbox_widget.findChild(QCheckBox)
                 if checkbox and checkbox.isChecked():
+                    desc_item = self.proposed_actions_table.item(row, 2)
                     action_data = {
                         'action': self.proposed_actions_table.item(row, 1).text() if self.proposed_actions_table.item(row, 1) else "",
-                        'description': self.proposed_actions_table.item(row, 2).text() if self.proposed_actions_table.item(row, 2) else "",
+                        'description': desc_item.text() if desc_item else "",
                         'status': self.proposed_actions_table.item(row, 3).text() if self.proposed_actions_table.item(row, 3) else "",
-                        'confidence': self.proposed_actions_table.item(row, 4).text() if self.proposed_actions_table.item(row, 4) else ""
+                        'confidence': self.proposed_actions_table.item(row, 4).text() if self.proposed_actions_table.item(row, 4) else "",
+                        'view_level': desc_item.data(Qt.UserRole) if desc_item else None,
                     }
                     selected_actions.append(action_data)
         return selected_actions

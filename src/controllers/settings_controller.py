@@ -40,7 +40,7 @@ class ProviderTestWorker(QThread):
 
             try:
                 success, message = loop.run_until_complete(
-                    asyncio.wait_for(self._test_provider(), timeout=30.0)
+                    asyncio.wait_for(self._test_provider(), timeout=15.0)
                 )
 
                 if success:
@@ -51,8 +51,8 @@ class ProviderTestWorker(QThread):
                 self.test_completed.emit(success, message)
 
             except asyncio.TimeoutError:
-                log.log_warn(f"Provider test timeout for '{provider_name}' after 30 seconds")
-                self.test_completed.emit(False, f"Test timeout after 30 seconds")
+                log.log_warn(f"Provider test timeout for '{provider_name}' after 15 seconds")
+                self.test_completed.emit(False, f"Test timeout after 15 seconds")
 
             except Exception as e:
                 log.log_error(f"Provider test execution failed for '{provider_name}': {e}")
@@ -241,7 +241,7 @@ class SymGraphTestWorker(QThread):
 
             try:
                 success, message = loop.run_until_complete(
-                    asyncio.wait_for(self._test_symgraph(), timeout=30.0)
+                    asyncio.wait_for(self._test_symgraph(), timeout=15.0)
                 )
 
                 if success:
@@ -252,8 +252,8 @@ class SymGraphTestWorker(QThread):
                 self.test_completed.emit(success, message)
 
             except asyncio.TimeoutError:
-                log.log_warn("SymGraph API test timeout after 30 seconds")
-                self.test_completed.emit(False, "Test timeout after 30 seconds")
+                log.log_warn("SymGraph API test timeout after 15 seconds")
+                self.test_completed.emit(False, "Test timeout after 15 seconds")
 
             except Exception as e:
                 log.log_error(f"SymGraph API test execution failed: {e}")
@@ -477,7 +477,8 @@ class ProviderDialog(QDialog):
 
                 is_anthropic_oauth = provider_type == ProviderType.ANTHROPIC_OAUTH
                 is_codex_oauth = provider_type == ProviderType.OPENAI_OAUTH
-                is_oauth = is_anthropic_oauth or is_codex_oauth
+                is_gemini_oauth = provider_type == ProviderType.GEMINI_OAUTH
+                is_oauth = is_anthropic_oauth or is_codex_oauth or is_gemini_oauth
                 self.authenticate_button.setVisible(is_oauth)
                 self.oauth_note_label.setVisible(is_oauth)
 
@@ -496,6 +497,14 @@ class ProviderDialog(QDialog):
                     self.oauth_note_label.setText(
                         "Click 'Authenticate' to sign in with your ChatGPT Pro/Plus subscription.\n"
                         "After authorization, copy the code from the browser URL bar."
+                    )
+                elif is_gemini_oauth:
+                    self.api_key_label.setText("OAuth Token (JSON):")
+                    self.key_edit.setEchoMode(QLineEdit.Normal)
+                    self.key_edit.setPlaceholderText('Click "Authenticate" to sign in with Google')
+                    self.oauth_note_label.setText(
+                        "Click 'Authenticate' to sign in with your Google account.\n"
+                        "The OAuth token will be stored as JSON in the field above."
                     )
                 else:
                     self.api_key_label.setText("API Key:")
@@ -563,11 +572,14 @@ class ProviderDialog(QDialog):
 
         is_codex = provider_type == ProviderType.OPENAI_OAUTH
         is_anthropic = provider_type == ProviderType.ANTHROPIC_OAUTH
+        is_gemini = provider_type == ProviderType.GEMINI_OAUTH
 
         if is_codex:
             self._authenticate_codex()
         elif is_anthropic:
             self._authenticate_anthropic()
+        elif is_gemini:
+            self._authenticate_gemini()
         else:
             QMessageBox.warning(self, "Not Supported",
                 "OAuth authentication is not supported for this provider type.")
@@ -925,6 +937,211 @@ class ProviderDialog(QDialog):
             log.log_error(f"OAuth authentication error: {e}")
             QMessageBox.critical(self, "Authentication Error", f"An error occurred during authentication:\n\n{e}")
 
+    def _authenticate_gemini(self):
+        """Handle Google Gemini OAuth authentication with automatic callback"""
+        from PySide6.QtWidgets import QMessageBox, QProgressDialog
+        from PySide6.QtCore import Qt
+
+        try:
+            from ..services.llm_providers.oauth_worker import GeminiOAuthWorker
+
+            log.log_info("Starting Gemini OAuth authentication with automatic callback")
+
+            self._oauth_auth_completed = False
+
+            self._oauth_progress = QProgressDialog(
+                "Waiting for authentication...\n\n"
+                "Please complete sign-in in your browser.\n"
+                "This dialog will close automatically when done.",
+                "Use Manual Entry",
+                0, 0,
+                self
+            )
+            self._oauth_progress.setWindowTitle("Google Gemini Authentication")
+            self._oauth_progress.setWindowModality(Qt.WindowModal)
+            self._oauth_progress.setMinimumDuration(0)
+            self._oauth_progress.setMinimumWidth(400)
+
+            self._oauth_worker = GeminiOAuthWorker(timeout=300)
+            self._oauth_worker.authentication_complete.connect(self._on_gemini_auth_complete)
+            self._oauth_worker.authentication_failed.connect(self._on_gemini_auth_failed)
+            self._oauth_worker.status_update.connect(
+                lambda msg: self._oauth_progress.setLabelText(msg) if self._oauth_progress else None
+            )
+
+            def on_cancel():
+                if getattr(self, '_oauth_auth_completed', False):
+                    return
+                if hasattr(self, '_oauth_worker') and self._oauth_worker:
+                    self._oauth_worker.cancel()
+
+            self._oauth_progress.canceled.connect(on_cancel)
+            self._oauth_worker.finished.connect(self._oauth_worker.deleteLater)
+
+            self._oauth_worker.start()
+            self._oauth_progress.show()
+
+        except ImportError as e:
+            log.log_error(f"OAuth import error: {e}")
+            self._authenticate_gemini_manual()
+        except Exception as e:
+            log.log_error(f"OAuth authentication error: {e}")
+            self._authenticate_gemini_manual()
+
+    def _on_gemini_auth_complete(self, result: dict):
+        """Handle successful Gemini OAuth authentication"""
+        from PySide6.QtWidgets import QMessageBox
+
+        self._oauth_auth_completed = True
+
+        if hasattr(self, '_oauth_progress') and self._oauth_progress:
+            self._oauth_progress.close()
+            self._oauth_progress = None
+
+        credentials_json = result.get('credentials_json', '')
+        self.key_edit.setText(credentials_json)
+
+        email = result.get('email', '')
+        email_msg = f" ({email})" if email else ""
+
+        log.log_info("Gemini OAuth authentication successful - token stored in API key field")
+        QMessageBox.information(self, "Authentication Successful",
+            f"Successfully authenticated with Google Gemini{email_msg}!\n\n"
+            "The OAuth token has been stored. Click OK to save the provider.")
+
+    def _on_gemini_auth_failed(self, error: str):
+        """Handle failed Gemini OAuth authentication"""
+        from PySide6.QtWidgets import QMessageBox
+
+        self._oauth_auth_completed = True
+
+        if hasattr(self, '_oauth_progress') and self._oauth_progress:
+            self._oauth_progress.close()
+            self._oauth_progress = None
+
+        if error == "cancelled":
+            log.log_info("User cancelled automatic OAuth, showing manual entry")
+            self._authenticate_gemini_manual()
+            return
+        elif error == "timeout":
+            reply = QMessageBox.question(
+                self,
+                "Authentication Timeout",
+                "The authentication request timed out.\n\n"
+                "Would you like to try manual code entry instead?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply == QMessageBox.Yes:
+                self._authenticate_gemini_manual()
+        elif error.startswith("server_error:"):
+            log.log_info("Falling back to manual entry due to server error")
+            self._authenticate_gemini_manual()
+        else:
+            reply = QMessageBox.question(
+                self,
+                "Authentication Error",
+                f"An error occurred during authentication:\n\n{error}\n\n"
+                "Would you like to try manual code entry instead?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply == QMessageBox.Yes:
+                self._authenticate_gemini_manual()
+
+    def _authenticate_gemini_manual(self):
+        """Manual fallback for Gemini OAuth authentication using headless mode"""
+        from PySide6.QtWidgets import QMessageBox, QInputDialog
+        import asyncio
+
+        try:
+            from ..services.llm_providers.oauth_gemini_utils import (
+                generate_pkce,
+                generate_state,
+                open_headless_auth_browser,
+                exchange_code_for_tokens,
+                fetch_user_info,
+                setup_user,
+                create_credentials_json,
+                OAUTH_HEADLESS_REDIRECT_URI,
+            )
+
+            # Generate PKCE codes and state (headless mode uses PKCE)
+            verifier, challenge = generate_pkce()
+            state = generate_state()
+
+            # Open browser for authorization (headless mode with PKCE)
+            auth_url = open_headless_auth_browser(challenge, state)
+            log.log_info("Opened browser for Gemini OAuth authorization (manual mode)")
+
+            # Show dialog to get authorization code from user
+            code, ok = QInputDialog.getText(
+                self,
+                "OAuth Authentication (Manual)",
+                "A browser window has been opened for Google Gemini authentication.\n\n"
+                "1. Sign in to your Google account in the browser\n"
+                "2. Authorize IDAssist to access your account\n"
+                "3. Copy the authorization code shown on the page\n"
+                "4. Paste it below:\n\n"
+                "Authorization Code:"
+            )
+
+            if not ok or not code.strip():
+                log.log_info("OAuth authentication cancelled by user")
+                QMessageBox.information(self, "Authentication Cancelled",
+                    "Authentication was cancelled.")
+                return
+
+            auth_code = code.strip()
+
+            # Exchange code for tokens (with PKCE verifier for headless mode)
+            log.log_info("Exchanging authorization code for tokens...")
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                tokens = loop.run_until_complete(
+                    exchange_code_for_tokens(auth_code, OAUTH_HEADLESS_REDIRECT_URI, verifier)
+                )
+
+                if tokens.get("error"):
+                    error_msg = tokens.get('error_description', tokens['error'])
+                    log.log_error(f"OAuth token exchange failed: {error_msg}")
+                    QMessageBox.critical(self, "Authentication Failed",
+                        f"Token exchange failed: {error_msg}")
+                    return
+
+                # Fetch user info and setup
+                email = loop.run_until_complete(fetch_user_info(tokens["access_token"]))
+                user_info = loop.run_until_complete(setup_user(tokens["access_token"]))
+            finally:
+                loop.close()
+
+            # Create JSON credentials and store
+            credentials_json = create_credentials_json(
+                tokens,
+                email=email,
+                project_id=user_info.get("project_id", ""),
+                tier=user_info.get("tier", ""),
+                tier_name=user_info.get("tier_name", ""),
+            )
+            self.key_edit.setText(credentials_json)
+
+            email_msg = f" ({email})" if email else ""
+            log.log_info("Gemini OAuth authentication successful - token stored in API key field")
+            QMessageBox.information(self, "Authentication Successful",
+                f"Successfully authenticated with Google Gemini{email_msg}!\n\n"
+                "The OAuth token has been stored. Click OK to save the provider.")
+
+        except ImportError as e:
+            log.log_error(f"OAuth import error: {e}")
+            QMessageBox.critical(self, "Missing Dependencies",
+                f"OAuth authentication requires additional packages.\n\nError: {e}")
+        except Exception as e:
+            log.log_error(f"OAuth authentication error: {e}")
+            QMessageBox.critical(self, "Authentication Error",
+                f"An error occurred during authentication:\n\n{e}")
+
 
 class MCPProviderDialog(QDialog):
     """Dialog for adding/editing MCP providers"""
@@ -1047,6 +1264,10 @@ class SettingsController(QObject):
         self.view.symgraph_api_url_changed.connect(self.update_symgraph_api_url)
         self.view.symgraph_api_key_changed.connect(self.update_symgraph_api_key)
         self.view.symgraph_test_requested.connect(self.test_symgraph)
+
+        self.view.llm_test_cancel_requested.connect(self.cancel_llm_test)
+        self.view.mcp_test_cancel_requested.connect(self.cancel_mcp_test)
+        self.view.symgraph_test_cancel_requested.connect(self.cancel_symgraph_test)
 
     def load_initial_data(self):
         """Load initial data from service into view"""
@@ -1208,7 +1429,7 @@ class SettingsController(QObject):
             provider = providers[row]
 
             provider_type = provider.get('provider_type', '')
-            requires_key = provider_type not in ('ollama', 'anthropic_cli', 'anthropic_oauth', 'openai_oauth')
+            requires_key = provider_type not in ('ollama', 'anthropic_cli', 'anthropic_oauth', 'openai_oauth', 'gemini_oauth')
             if not provider.get('api_key') and requires_key:
                 self.view.set_llm_test_status('failure',
                     f"Provider '{provider['name']}' has no API key configured.")
@@ -1227,11 +1448,21 @@ class SettingsController(QObject):
             self.view.set_llm_test_status('failure', f"Test failed: {str(e)}")
 
     def on_provider_test_completed(self, success, message):
+        if self.view.llm_test_button.text() != "Cancel":
+            return  # Already cancelled
         self.view.set_llm_test_enabled(True)
         if success:
             self.view.set_llm_test_status('success', message)
         else:
             self.view.set_llm_test_status('failure', message)
+
+    def cancel_llm_test(self):
+        if hasattr(self, 'test_worker') and self.test_worker and self.test_worker.isRunning():
+            self.test_worker.requestInterruption()
+            self.test_worker.quit()
+            self.test_worker.wait(2000)
+        self.view.set_llm_test_enabled(True)
+        self.view.set_llm_test_status('failure', 'Test cancelled by user')
 
     def set_active_llm_provider(self, provider_name):
         log.log_debug(f"set_active_llm_provider called with: '{provider_name}'")
@@ -1373,11 +1604,21 @@ class SettingsController(QObject):
             self.view.set_mcp_test_status('failure', f"Test failed: {str(e)}")
 
     def on_mcp_test_completed(self, success, message, test_data):
+        if self.view.mcp_test_button.text() != "Cancel":
+            return  # Already cancelled
         self.view.set_mcp_test_enabled(True)
         if success:
             self.view.set_mcp_test_status('success', message)
         else:
             self.view.set_mcp_test_status('failure', message)
+
+    def cancel_mcp_test(self):
+        if hasattr(self, 'mcp_test_worker') and self.mcp_test_worker and self.mcp_test_worker.isRunning():
+            self.mcp_test_worker.requestInterruption()
+            self.mcp_test_worker.quit()
+            self.mcp_test_worker.wait(2000)
+        self.view.set_mcp_test_enabled(True)
+        self.view.set_mcp_test_status('failure', 'Test cancelled by user')
 
     def update_system_prompt(self, prompt_text):
         try:
@@ -1423,11 +1664,21 @@ class SettingsController(QObject):
             self.view.set_symgraph_test_status('failure', f'Test failed: {str(e)}')
 
     def on_symgraph_test_completed(self, success, message):
+        if self.view.symgraph_test_button.text() != "Cancel":
+            return  # Already cancelled
         self.view.set_symgraph_test_enabled(True)
         if success:
             self.view.set_symgraph_test_status('success', message)
         else:
             self.view.set_symgraph_test_status('failure', message)
+
+    def cancel_symgraph_test(self):
+        if hasattr(self, 'symgraph_test_worker') and self.symgraph_test_worker and self.symgraph_test_worker.isRunning():
+            self.symgraph_test_worker.requestInterruption()
+            self.symgraph_test_worker.quit()
+            self.symgraph_test_worker.wait(2000)
+        self.view.set_symgraph_test_enabled(True)
+        self.view.set_symgraph_test_status('failure', 'Test cancelled by user')
 
     def show_error(self, title, message):
         QMessageBox.critical(self.view, title, message)

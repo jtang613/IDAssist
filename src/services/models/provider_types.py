@@ -33,9 +33,16 @@ class ProviderType(Enum):
     OLLAMA = "ollama"                         # Ollama (local)
     OPENWEBUI = "openwebui"                   # Open WebUI (local/proxy)
 
+    # Gemini providers (alphabetically)
+    GEMINI_OAUTH = "gemini_oauth"             # OAuth (Gemini CLI subscription)
+    GEMINI_PLATFORM = "gemini_platform"       # Platform API (direct API key)
+
     # OpenAI providers (alphabetically)
     OPENAI_OAUTH = "openai_oauth"             # OAuth (ChatGPT Pro/Plus subscription)
     OPENAI_PLATFORM = "openai_platform"       # Platform API (direct API key)
+
+    # X.ai providers
+    XAI_PLATFORM = "xai_platform"             # Platform API (direct API key)
 
     @classmethod
     def get_display_names(cls) -> dict['ProviderType', str]:
@@ -45,6 +52,9 @@ class ProviderType(Enum):
             cls.ANTHROPIC_CLI: "Anthropic CLI (Claude Code)",
             cls.ANTHROPIC_OAUTH: "Anthropic OAuth (Claude Pro/Max)",
             cls.ANTHROPIC_PLATFORM: "Anthropic Platform API",
+            # Gemini
+            cls.GEMINI_OAUTH: "Gemini OAuth (Gemini CLI)",
+            cls.GEMINI_PLATFORM: "Gemini Platform API",
             # Local/Proxy
             cls.LITELLM: "LiteLLM Proxy",
             cls.LMSTUDIO: "LM Studio",
@@ -53,6 +63,8 @@ class ProviderType(Enum):
             # OpenAI
             cls.OPENAI_OAUTH: "OpenAI OAuth (ChatGPT Pro/Plus)",
             cls.OPENAI_PLATFORM: "OpenAI Platform API",
+            # X.ai
+            cls.XAI_PLATFORM: "xAI Platform API",
         }
 
     @classmethod
@@ -63,6 +75,9 @@ class ProviderType(Enum):
             cls.ANTHROPIC_CLI: "",  # CLI-based, no URL needed
             cls.ANTHROPIC_OAUTH: "https://api.anthropic.com",
             cls.ANTHROPIC_PLATFORM: "https://api.anthropic.com",
+            # Gemini
+            cls.GEMINI_OAUTH: "https://cloudcode-pa.googleapis.com",
+            cls.GEMINI_PLATFORM: "https://generativelanguage.googleapis.com/v1beta/openai/",
             # Local/Proxy
             cls.LITELLM: "http://localhost:4000",
             cls.LMSTUDIO: "http://localhost:1234/v1",
@@ -71,6 +86,8 @@ class ProviderType(Enum):
             # OpenAI
             cls.OPENAI_OAUTH: "https://chatgpt.com/backend-api/codex/responses",
             cls.OPENAI_PLATFORM: "https://api.openai.com/v1",
+            # X.ai
+            cls.XAI_PLATFORM: "https://api.x.ai/v1",
         }
 
     @classmethod
@@ -89,6 +106,15 @@ class ProviderType(Enum):
             cls.ANTHROPIC_PLATFORM: [
                 "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022",
                 "claude-3-opus-20240229", "claude-3-sonnet-20240229"
+            ],
+            # Gemini
+            cls.GEMINI_OAUTH: [
+                "gemini-2.5-flash", "gemini-2.5-pro",
+                "gemini-2.0-flash", "gemini-2.0-flash-lite"
+            ],
+            cls.GEMINI_PLATFORM: [
+                "gemini-2.5-flash", "gemini-2.5-pro",
+                "gemini-2.0-flash", "gemini-2.0-flash-lite"
             ],
             # Local/Proxy
             cls.LITELLM: [
@@ -112,6 +138,10 @@ class ProviderType(Enum):
             cls.OPENAI_PLATFORM: [
                 "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"
             ],
+            # X.ai
+            cls.XAI_PLATFORM: [
+                "grok-3-mini", "grok-3"
+            ],
         }
 
     @classmethod
@@ -132,12 +162,15 @@ class ProviderType(Enum):
             cls.ANTHROPIC_CLI,       # Via CLI --allowedTools flag
             cls.ANTHROPIC_OAUTH,     # Full tool calling support
             cls.ANTHROPIC_PLATFORM,  # Full tool calling support
+            cls.GEMINI_OAUTH,        # Full tool calling support
+            cls.GEMINI_PLATFORM,     # Full tool calling support
             cls.LITELLM,             # Proxies tool calls
             cls.LMSTUDIO,            # Limited support
             cls.OLLAMA,              # Limited support
             cls.OPENWEBUI,           # Depends on connected providers
             cls.OPENAI_OAUTH,        # Full tool calling via Responses API
             cls.OPENAI_PLATFORM,     # Full tool calling support
+            cls.XAI_PLATFORM,        # Full tool calling support
         }
 
     @classmethod
@@ -147,12 +180,15 @@ class ProviderType(Enum):
             # Note: ANTHROPIC_CLI does NOT support true streaming
             cls.ANTHROPIC_OAUTH,
             cls.ANTHROPIC_PLATFORM,
+            cls.GEMINI_OAUTH,
+            cls.GEMINI_PLATFORM,
             cls.LITELLM,
             cls.LMSTUDIO,
             cls.OLLAMA,
             cls.OPENWEBUI,
             cls.OPENAI_OAUTH,
             cls.OPENAI_PLATFORM,
+            cls.XAI_PLATFORM,
         }
 
     @classmethod
@@ -160,7 +196,9 @@ class ProviderType(Enum):
         """Check if provider type requires an API key (vs OAuth or local)"""
         return provider_type in {
             cls.ANTHROPIC_PLATFORM,
+            cls.GEMINI_PLATFORM,
             cls.OPENAI_PLATFORM,
+            cls.XAI_PLATFORM,
         }
 
     @classmethod
@@ -168,6 +206,7 @@ class ProviderType(Enum):
         """Check if provider type uses OAuth authentication"""
         return provider_type in {
             cls.ANTHROPIC_OAUTH,
+            cls.GEMINI_OAUTH,
             cls.OPENAI_OAUTH,
         }
 

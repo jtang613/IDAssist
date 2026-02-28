@@ -632,8 +632,8 @@ class QueryTabView(QWidget):
         """Generate HTML for RLHF feedback thumbs up/down links"""
         return """
         <div style='text-align: center; margin-top: 20px; padding-top: 10px; border-top: 1px solid #ddd;'>
-            <a href='rlhf://upvote' style='text-decoration: none; color: #666; margin-right: 15px; font-size: 14px;'>+1</a>
-            <a href='rlhf://downvote' style='text-decoration: none; color: #666; font-size: 14px;'>-1</a>
+            <a href='rlhf://upvote' style='text-decoration: none; color: #4CAF50; margin-right: 15px; font-size: 16px;'>&#x2714;&#xFE0F;</a>
+            <a href='rlhf://downvote' style='text-decoration: none; color: #F44336; font-size: 16px;'>&#x274C;</a>
         </div>
         """
 

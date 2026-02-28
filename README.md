@@ -2,15 +2,16 @@
 
 *AI-Powered Reverse Engineering Plugin for IDA Pro*
 
-**Author:** jtang613
+**Author:** Jason Tang
 
 ## Description
 
-IDAssist is an IDA Pro plugin that integrates LLM-powered analysis directly into IDA's interface, providing AI-assisted binary reverse engineering through configurable LLM providers, semantic knowledge graphs, RAG document search, and collaborative symbol sharing via SymGraph.
+IDAssist is an IDA Pro plugin that integrates LLM-powered analysis directly into IDA's interface, providing AI-assisted binary reverse engineering through configurable LLM providers, semantic knowledge graphs, RAG document search, and supports a wide diversity of LLM providers.
 
 Built with Python and PySide6, IDAssist runs as a dockable panel inside IDA Pro 9.0+ and communicates with LLM providers (OpenAI, Anthropic, Ollama, LiteLLM, and more) to analyze functions, suggest renames, answer questions about code, and build a searchable knowledge graph of an entire binary.
 
 <!-- SCREENSHOT: IDAssist main interface showing the Explain tab with a function explanation and security analysis panel -->
+![Screenshot](/docs/screenshots/slideshow.gif)
 
 ## Core Features
 
@@ -64,7 +65,8 @@ IDAssist follows an MVC (Model-View-Controller) pattern:
 - **Views** (`src/views/`) — PySide6 tab widgets that emit signals on user interaction
 - **Controllers** (`src/controllers/`) — Connect view signals to service calls, manage state
 - **Services** (`src/services/`) — Business logic, LLM providers, database access, graph analysis
-- **MCP Tools** (`src/mcp_server/`) — Internal tool definitions and handlers for IDA functionality
+- **Internal Tools** (`src/services/internal_tools.py`) — IDA-specific tool definitions for LLM function calling
+- **Graph Tools** (`src/services/graphrag/graphrag_tools.py`) — Semantic graph read/write tools for LLM interaction
 
 Key design principles:
 - All IDA API calls execute on the main thread via `execute_on_main_thread()`
@@ -74,21 +76,45 @@ Key design principles:
 
 ## Quick Start
 
-1. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
+1. **Install the plugin** (recommended — IDA Plugin Manager):
+
+   ```
+   hcli plugin install idassist
    ```
 
-2. **Install the plugin:** Copy `idassist_plugin.py` and the `src/` directory to your IDA plugins folder:
+   This automatically installs the plugin and its Python dependencies into IDA's environment.
+
+2. **Or install manually** (symlink for development):
+
+   Install dependencies using **IDA's bundled Python** (not your system Python):
+
+   **Linux / macOS:**
    ```bash
-   cp idassist_plugin.py ~/.idapro/plugins/
-   cp -r src ~/.idapro/plugins/
+   <IDA_INSTALL_DIR>/python3/bin/pip3 install -r requirements.txt
    ```
-   Or create file-level symlinks for development:
+
+   **Windows:**
+   ```cmd
+   "<IDA_INSTALL_DIR>\python3\python.exe" -m pip install -r requirements.txt
+   ```
+
+   > Replace `<IDA_INSTALL_DIR>` with your IDA Pro installation path (e.g., `/opt/idapro-9.0` or `C:\Program Files\IDA Pro 9.0`).
+
+   Then symlink the plugin into your IDA plugins directory:
+
+   **Linux / macOS:**
    ```bash
    ln -s /path/to/IDAssist/idassist_plugin.py ~/.idapro/plugins/idassist_plugin.py
    ln -s /path/to/IDAssist/src ~/.idapro/plugins/src
    ```
+
+   **Windows (requires Administrator or Developer Mode):**
+   ```cmd
+   mklink "%APPDATA%\Hex-Rays\IDA Pro\plugins\idassist_plugin.py" "C:\path\to\IDAssist\idassist_plugin.py"
+   mklink /D "%APPDATA%\Hex-Rays\IDA Pro\plugins\src" "C:\path\to\IDAssist\src"
+   ```
+
+   > **Tip:** You can also set the `IDAUSR` environment variable to a custom directory containing a `plugins/` subdirectory with these symlinks.
 
 3. **Open IDAssist:** Launch IDA Pro, open a binary, and press `Ctrl+Shift+A` (or Edit > Plugins > IDAssist).
 
@@ -157,7 +183,7 @@ Right-click in any Disassembly or Pseudocode view to access:
 
 ## Homepage
 
-[https://symgraph.io](https://symgraph.io)
+[https://github.com/jtang613/IDAssist](https://github.com/jtang613/IDAssist)
 
 ## License
 

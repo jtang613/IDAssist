@@ -17,7 +17,8 @@ from .mcp_client_service import MCPClientService
 from .models.mcp_models import MCPTool
 
 from src.ida_compat import log
-from src.mcp_server.tools import get_internal_tools_for_llm
+from .internal_tools import get_internal_tools_for_llm
+from .graphrag.graphrag_tools import get_graphrag_tools_for_llm
 
 
 @dataclass
@@ -102,12 +103,16 @@ class MCPConnectionManager:
             # Add internal tools that are NOT already provided externally
             internal_tools = get_internal_tools_for_llm(exclude_names=external_names)
 
-            tools = external_tools + internal_tools
+            # Add graphrag tools (always available, even without MCP connection)
+            graphrag_tools = get_graphrag_tools_for_llm(exclude_names=external_names)
+
+            tools = external_tools + internal_tools + graphrag_tools
             self._state.tools = tools
             self._state.tools_cached_at = current_time
             log.log_info(
                 f"Refreshed MCP tools cache: {len(external_tools)} external + "
-                f"{len(internal_tools)} internal = {len(tools)} total"
+                f"{len(internal_tools)} internal + {len(graphrag_tools)} graphrag = "
+                f"{len(tools)} total"
             )
             return tools.copy()
 

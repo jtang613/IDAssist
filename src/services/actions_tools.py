@@ -22,6 +22,11 @@ class IDAssistActionTool(ABC):
     def __init__(self, context_service: BinaryContextService, actions_service: ActionsService):
         self.context_service = context_service
         self.actions_service = actions_service
+        self._view_level = None
+
+    def set_view_level(self, view_level):
+        """Set the view level for the current analysis session."""
+        self._view_level = view_level
 
     @property
     @abstractmethod
@@ -96,7 +101,8 @@ class RenameFunctionTool(IDAssistActionTool):
                 current_value=arguments["current_name"],
                 proposed_value=arguments["suggested_name"],
                 confidence=confidence,
-                rationale=arguments["rationale"]
+                rationale=arguments["rationale"],
+                view_level=self._view_level
             )
 
             log.log_info(f"Function rename suggested: {arguments['current_name']} -> {arguments['suggested_name']} (confidence: {confidence:.2f})")
@@ -176,7 +182,8 @@ class RenameVariableTool(IDAssistActionTool):
                 current_value=arguments["current_name"],
                 proposed_value=arguments["suggested_name"],
                 confidence=confidence,
-                rationale=arguments["rationale"]
+                rationale=arguments["rationale"],
+                view_level=self._view_level
             )
 
             log.log_info(f"Variable rename suggested: {arguments['current_name']} -> {arguments['suggested_name']} (confidence: {confidence:.2f})")
@@ -260,7 +267,8 @@ class RetypeVariableTool(IDAssistActionTool):
                 current_value=arguments["current_type"],
                 proposed_value=arguments["suggested_type"],
                 confidence=confidence,
-                rationale=arguments["rationale"]
+                rationale=arguments["rationale"],
+                view_level=self._view_level
             )
 
             log.log_info(f"Variable retype suggested: {arguments['variable_name']} ({arguments['current_type']} -> {arguments['suggested_type']}) (confidence: {confidence:.2f})")
@@ -344,7 +352,8 @@ class CreateStructTool(IDAssistActionTool):
                 current_value=arguments["offset_pattern"],
                 proposed_value=arguments["suggested_definition"],
                 confidence=confidence,
-                rationale=arguments["rationale"]
+                rationale=arguments["rationale"],
+                view_level=self._view_level
             )
 
             log.log_info(f"Struct creation suggested: {arguments['struct_name']} (confidence: {confidence:.2f})")

@@ -151,7 +151,7 @@ class ManualAnalysisPanel(QWidget):
         # Add stretch to push everything to the top
         layout.addStretch()
 
-    BUTTON_WIDTH = 140
+    BUTTON_WIDTH = 168
 
     def _create_button_row(self, button_text: str, description: str, name: str) -> QFrame:
         """Create a button row with description."""

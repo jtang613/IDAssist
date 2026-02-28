@@ -1,6 +1,7 @@
 # Settings Tab Reference
 
 <!-- SCREENSHOT: Settings tab showing LLM provider configuration and system prompt -->
+![Screenshot](/docs/screenshots/settings_tab.png)
 
 ## Purpose
 
@@ -92,19 +93,6 @@ When adding or editing a provider:
 | **Edit** | Modify the selected MCP server's settings. |
 | **Delete** | Remove the selected MCP server. |
 | **Test** | Verify connectivity to the MCP server. |
-
-## SymGraph
-
-Configure the connection to the SymGraph collaborative symbol sharing platform:
-
-| Field | Description |
-|-------|-------------|
-| **API URL** | SymGraph server URL (e.g., `https://api.symgraph.io`). |
-| **API Key** | Authentication key for push/pull operations. |
-| **Show** button | Toggle API key visibility. |
-| **Test** button | Verify connectivity to the SymGraph server. |
-
-Free queries (checking if a binary exists) do not require an API key. Push and pull operations require authentication.
 
 ## System Prompt
 
