@@ -123,15 +123,6 @@ The semantic graph enhances other IDAssist features:
 - **RAG + Graph**: Combine document context with graph knowledge for the most comprehensive analysis
 - **ReAct Agent**: The autonomous agent can traverse the graph to investigate relationships across the binary
 
-## Sharing via SymGraph
-
-Once your graph is built, push it to the SymGraph platform for team collaboration:
-
-1. Switch to the **SymGraph** tab
-2. Check **Symbols** and **Graph** under "Data to Push"
-3. Click **Push to SymGraph**
-4. Team members can pull your analysis, including function summaries, security flags, and graph structure
-
 ## Tips
 
 - **Start with ReIndex**: Always ReIndex before running other analyses — it provides the structural foundation

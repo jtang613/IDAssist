@@ -4,7 +4,7 @@
 IDAssist Internal Tools
 
 IDA-specific tool definitions and handlers used by the Actions tab
-and tool orchestrator. All tools that modify the IDB use execute_on_main_thread().
+and tool orchestrator. All tools that call IDA APIs use execute_on_main_thread().
 """
 
 from typing import Any, Dict, List
@@ -185,70 +185,103 @@ def _parse_address(addr_str: str) -> int:
 def _decompile_function(args: Dict) -> List['TextContent']:
     """Decompile a function using Hex-Rays."""
     ea = _parse_address(args["address"])
+    result_holder = [None, None]  # [result, error]
 
-    func = ida_funcs.get_func(ea)
-    if not func:
-        return [TextContent(type="text", text=f"No function found at {hex(ea)}")]
+    def _do():
+        try:
+            func = ida_funcs.get_func(ea)
+            if not func:
+                result_holder[0] = [TextContent(type="text", text=f"No function found at {hex(ea)}")]
+                return
 
-    try:
-        cfunc = ida_hexrays.decompile(func.start_ea)
-        if not cfunc:
-            return [TextContent(type="text", text=f"Decompilation failed for {hex(ea)}")]
+            try:
+                cfunc = ida_hexrays.decompile(func.start_ea)
+                if not cfunc:
+                    result_holder[0] = [TextContent(type="text", text=f"Decompilation failed for {hex(ea)}")]
+                    return
 
-        func_name = ida_funcs.get_func_name(func.start_ea) or f"sub_{func.start_ea:x}"
-        result = f"// Function: {func_name} at {hex(func.start_ea)}\n{str(cfunc)}"
-        return [TextContent(type="text", text=result)]
-    except Exception as e:
-        return [TextContent(type="text", text=f"Decompilation error: {str(e)}")]
+                func_name = ida_funcs.get_func_name(func.start_ea) or f"sub_{func.start_ea:x}"
+                result = f"// Function: {func_name} at {hex(func.start_ea)}\n{str(cfunc)}"
+                result_holder[0] = [TextContent(type="text", text=result)]
+            except Exception as e:
+                result_holder[0] = [TextContent(type="text", text=f"Decompilation error: {str(e)}")]
+        except Exception as e:
+            result_holder[1] = str(e)
+
+    execute_on_main_thread(_do)
+    if result_holder[1]:
+        return [TextContent(type="text", text=f"Error: {result_holder[1]}")]
+    return result_holder[0]
 
 
 def _get_disassembly(args: Dict) -> List['TextContent']:
     """Get disassembly listing for a function."""
     ea = _parse_address(args["address"])
+    result_holder = [None, None]  # [result, error]
 
-    func = ida_funcs.get_func(ea)
-    if not func:
-        return [TextContent(type="text", text=f"No function found at {hex(ea)}")]
+    def _do():
+        try:
+            func = ida_funcs.get_func(ea)
+            if not func:
+                result_holder[0] = [TextContent(type="text", text=f"No function found at {hex(ea)}")]
+                return
 
-    func_name = ida_funcs.get_func_name(func.start_ea) or f"sub_{func.start_ea:x}"
-    lines = [f"; Function: {func_name} at {hex(func.start_ea)}"]
+            func_name = ida_funcs.get_func_name(func.start_ea) or f"sub_{func.start_ea:x}"
+            lines = [f"; Function: {func_name} at {hex(func.start_ea)}"]
 
-    for item_ea in idautils.FuncItems(func.start_ea):
-        disasm = idc.generate_disasm_line(item_ea, 0)
-        lines.append(f"  0x{item_ea:08x}  {disasm}")
+            for item_ea in idautils.FuncItems(func.start_ea):
+                disasm = idc.generate_disasm_line(item_ea, 0)
+                lines.append(f"  0x{item_ea:08x}  {disasm}")
 
-    return [TextContent(type="text", text="\n".join(lines))]
+            result_holder[0] = [TextContent(type="text", text="\n".join(lines))]
+        except Exception as e:
+            result_holder[1] = str(e)
+
+    execute_on_main_thread(_do)
+    if result_holder[1]:
+        return [TextContent(type="text", text=f"Error: {result_holder[1]}")]
+    return result_holder[0]
 
 
 def _get_xrefs(args: Dict) -> List['TextContent']:
     """Get cross-references to/from an address."""
     ea = _parse_address(args["address"])
     direction = args.get("direction", "both")
+    result_holder = [None, None]  # [result, error]
 
-    results = []
+    def _do():
+        try:
+            results = []
 
-    if direction in ("to", "both"):
-        results.append("=== References TO ===")
-        for ref in idautils.CodeRefsTo(ea, 0):
-            func = ida_funcs.get_func(ref)
-            func_name = ida_funcs.get_func_name(func.start_ea) if func else "unknown"
-            results.append(f"  Code: 0x{ref:x} ({func_name})")
-        for ref in idautils.DataRefsTo(ea):
-            results.append(f"  Data: 0x{ref:x}")
+            if direction in ("to", "both"):
+                results.append("=== References TO ===")
+                for ref in idautils.CodeRefsTo(ea, 0):
+                    func = ida_funcs.get_func(ref)
+                    func_name = ida_funcs.get_func_name(func.start_ea) if func else "unknown"
+                    results.append(f"  Code: 0x{ref:x} ({func_name})")
+                for ref in idautils.DataRefsTo(ea):
+                    results.append(f"  Data: 0x{ref:x}")
 
-    if direction in ("from", "both"):
-        results.append("=== References FROM ===")
-        for ref in idautils.CodeRefsFrom(ea, 0):
-            func = ida_funcs.get_func(ref)
-            func_name = ida_funcs.get_func_name(func.start_ea) if func else "unknown"
-            results.append(f"  Code: 0x{ref:x} ({func_name})")
-        for ref in idautils.DataRefsFrom(ea):
-            results.append(f"  Data: 0x{ref:x}")
+            if direction in ("from", "both"):
+                results.append("=== References FROM ===")
+                for ref in idautils.CodeRefsFrom(ea, 0):
+                    func = ida_funcs.get_func(ref)
+                    func_name = ida_funcs.get_func_name(func.start_ea) if func else "unknown"
+                    results.append(f"  Code: 0x{ref:x} ({func_name})")
+                for ref in idautils.DataRefsFrom(ea):
+                    results.append(f"  Data: 0x{ref:x}")
 
-    if not results or all(r.startswith("===") for r in results):
-        results.append("No cross-references found")
+            if not results or all(r.startswith("===") for r in results):
+                results.append("No cross-references found")
 
-    return [TextContent(type="text", text="\n".join(results))]
+            result_holder[0] = [TextContent(type="text", text="\n".join(results))]
+        except Exception as e:
+            result_holder[1] = str(e)
+
+    execute_on_main_thread(_do)
+    if result_holder[1]:
+        return [TextContent(type="text", text=f"Error: {result_holder[1]}")]
+    return result_holder[0]
 
 
 def _navigate_to(args: Dict) -> List['TextContent']:
@@ -272,21 +305,26 @@ def _rename_function(args: Dict) -> List['TextContent']:
     """Rename a function."""
     ea = _parse_address(args["address"])
     new_name = args["new_name"]
-
-    func = ida_funcs.get_func(ea)
-    if not func:
-        return [TextContent(type="text", text=f"No function found at {hex(ea)}")]
-
-    old_name = ida_funcs.get_func_name(func.start_ea) or f"sub_{func.start_ea:x}"
-    result_holder = [False]
+    result_holder = [False, "", ""]  # [success, old_name, error]
 
     def _do():
-        result_holder[0] = ida_name.set_name(func.start_ea, new_name, ida_name.SN_CHECK)
+        try:
+            func = ida_funcs.get_func(ea)
+            if not func:
+                result_holder[2] = f"No function found at {hex(ea)}"
+                return
+
+            result_holder[1] = ida_funcs.get_func_name(func.start_ea) or f"sub_{func.start_ea:x}"
+            result_holder[0] = ida_name.set_name(func.start_ea, new_name, ida_name.SN_CHECK)
+        except Exception as e:
+            result_holder[2] = str(e)
 
     execute_on_main_thread(_do)
 
+    if result_holder[2]:
+        return [TextContent(type="text", text=f"Error: {result_holder[2]}")]
     if result_holder[0]:
-        return [TextContent(type="text", text=f"Renamed '{old_name}' to '{new_name}'")]
+        return [TextContent(type="text", text=f"Renamed '{result_holder[1]}' to '{new_name}'")]
     else:
         return [TextContent(type="text", text=f"Failed to rename function to '{new_name}'")]
 
@@ -320,36 +358,56 @@ def _get_function_list(args: Dict) -> List['TextContent']:
     """List functions in the binary."""
     name_filter = args.get("filter", "").lower()
     limit = args.get("limit", 100)
+    result_holder = [None, None]  # [result, error]
 
-    functions = []
-    for func_ea in idautils.Functions():
-        name = ida_funcs.get_func_name(func_ea) or f"sub_{func_ea:x}"
-        if name_filter and name_filter not in name.lower():
-            continue
+    def _do():
+        try:
+            functions = []
+            for func_ea in idautils.Functions():
+                name = ida_funcs.get_func_name(func_ea) or f"sub_{func_ea:x}"
+                if name_filter and name_filter not in name.lower():
+                    continue
 
-        func = ida_funcs.get_func(func_ea)
-        size = (func.end_ea - func.start_ea) if func else 0
-        functions.append(f"  0x{func_ea:08x}  {name}  (size: {size})")
+                func = ida_funcs.get_func(func_ea)
+                size = (func.end_ea - func.start_ea) if func else 0
+                functions.append(f"  0x{func_ea:08x}  {name}  (size: {size})")
 
-        if len(functions) >= limit:
-            break
+                if len(functions) >= limit:
+                    break
 
-    header = f"Functions ({len(functions)} shown):\n"
-    return [TextContent(type="text", text=header + "\n".join(functions))]
+            header = f"Functions ({len(functions)} shown):\n"
+            result_holder[0] = [TextContent(type="text", text=header + "\n".join(functions))]
+        except Exception as e:
+            result_holder[1] = str(e)
+
+    execute_on_main_thread(_do)
+    if result_holder[1]:
+        return [TextContent(type="text", text=f"Error: {result_holder[1]}")]
+    return result_holder[0]
 
 
 def _get_strings(args: Dict) -> List['TextContent']:
     """Get strings from the binary."""
     min_length = args.get("min_length", 4)
     limit = args.get("limit", 100)
+    result_holder = [None, None]  # [result, error]
 
-    strings = []
-    for s in idautils.Strings():
-        value = str(s)
-        if len(value) >= min_length:
-            strings.append(f"  0x{s.ea:08x}  ({s.length:4d})  {value}")
-            if len(strings) >= limit:
-                break
+    def _do():
+        try:
+            strings = []
+            for s in idautils.Strings():
+                value = str(s)
+                if len(value) >= min_length:
+                    strings.append(f"  0x{s.ea:08x}  ({s.length:4d})  {value}")
+                    if len(strings) >= limit:
+                        break
 
-    header = f"Strings ({len(strings)} shown):\n"
-    return [TextContent(type="text", text=header + "\n".join(strings))]
+            header = f"Strings ({len(strings)} shown):\n"
+            result_holder[0] = [TextContent(type="text", text=header + "\n".join(strings))]
+        except Exception as e:
+            result_holder[1] = str(e)
+
+    execute_on_main_thread(_do)
+    if result_holder[1]:
+        return [TextContent(type="text", text=f"Error: {result_holder[1]}")]
+    return result_holder[0]
