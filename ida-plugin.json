@@ -3,7 +3,7 @@
   "plugin": {
     "name": "idassist",
     "entryPoint": "idassist_plugin.py",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "AI-powered reverse engineering plugin with LLM analysis, semantic knowledge graphs, RAG search, and SymGraph collaboration",
     "license": "MIT",
     "urls": {
@@ -11,7 +11,8 @@
     },
     "authors": [
       {
-        "name": "Jason Tang"
+        "name": "Jason Tang",
+        "email": "jason.tang@badc0ded.net"
       }
     ],
     "keywords": ["llm", "ai", "reverse-engineering", "analysis", "knowledge-graph", "symgraph"],
