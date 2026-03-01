@@ -84,37 +84,33 @@ Key design principles:
 
    This automatically installs the plugin and its Python dependencies into IDA's environment.
 
-2. **Or install manually** (symlink for development):
+2. **Or install manually** (from release tarball):
 
-   Install dependencies using **IDA's bundled Python** (not your system Python):
+   Download the latest release zip from [GitHub Releases](https://github.com/jtang613/IDAssist/releases) and extract it into your IDA plugins directory:
 
    **Linux / macOS:**
    ```bash
-   <IDA_INSTALL_DIR>/python3/bin/pip3 install -r requirements.txt
+   unzip IDAssist-*.zip -d ~/.idapro/plugins/
+   ```
+
+   **Windows:**
+   Extract the zip into `%APPDATA%\Hex-Rays\IDA Pro\plugins\`.
+
+   Then install dependencies using **IDA's bundled Python** (not your system Python):
+
+   **Linux / macOS:**
+   ```bash
+   <IDA_INSTALL_DIR>/python3/bin/pip3 install -r ~/.idapro/plugins/IDAssist/requirements.txt
    ```
 
    **Windows:**
    ```cmd
-   "<IDA_INSTALL_DIR>\python3\python.exe" -m pip install -r requirements.txt
+   "<IDA_INSTALL_DIR>\python3\python.exe" -m pip install -r "%APPDATA%\Hex-Rays\IDA Pro\plugins\IDAssist\requirements.txt"
    ```
 
    > Replace `<IDA_INSTALL_DIR>` with your IDA Pro installation path (e.g., `/opt/idapro-9.0` or `C:\Program Files\IDA Pro 9.0`).
-
-   Then symlink the plugin into your IDA plugins directory:
-
-   **Linux / macOS:**
-   ```bash
-   ln -s /path/to/IDAssist/idassist_plugin.py ~/.idapro/plugins/idassist_plugin.py
-   ln -s /path/to/IDAssist/src ~/.idapro/plugins/src
-   ```
-
-   **Windows (requires Administrator or Developer Mode):**
-   ```cmd
-   mklink "%APPDATA%\Hex-Rays\IDA Pro\plugins\idassist_plugin.py" "C:\path\to\IDAssist\idassist_plugin.py"
-   mklink /D "%APPDATA%\Hex-Rays\IDA Pro\plugins\src" "C:\path\to\IDAssist\src"
-   ```
-
-   > **Tip:** You can also set the `IDAUSR` environment variable to a custom directory containing a `plugins/` subdirectory with these symlinks.
+   >
+   > **Tip:** You can also set the `IDAUSR` environment variable to a custom directory containing a `plugins/` subdirectory.
 
 3. **Open IDAssist:** Launch IDA Pro, open a binary, and press `Ctrl+Shift+A` (or Edit > Plugins > IDAssist).
 
