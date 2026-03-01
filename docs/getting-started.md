@@ -21,48 +21,33 @@ hcli plugin install idassist
 
 This automatically installs the plugin and its Python dependencies into IDA's environment. No further steps are needed — skip ahead to [Step 2: Verify Installation](#step-2-verify-installation).
 
-**Option B: Copy files**
+**Option B: Manual install** (from release zip)
 
-First, install Python dependencies using **IDA's bundled Python** (not your system Python):
+Download the latest release zip from [GitHub Releases](https://github.com/jtang613/IDAssist/releases) and extract it into your IDA plugins directory:
 
 **Linux / macOS:**
 ```bash
-<IDA_INSTALL_DIR>/python3/bin/pip3 install -r requirements.txt
+unzip IDAssist-*.zip -d ~/.idapro/plugins/
+```
+
+**Windows:**
+Extract the zip into `%APPDATA%\Hex-Rays\IDA Pro\plugins\`.
+
+Then install dependencies using **IDA's bundled Python** (not your system Python):
+
+**Linux / macOS:**
+```bash
+<IDA_INSTALL_DIR>/python3/bin/pip3 install -r ~/.idapro/plugins/IDAssist/requirements.txt
 ```
 
 **Windows:**
 ```cmd
-"<IDA_INSTALL_DIR>\python3\python.exe" -m pip install -r requirements.txt
+"<IDA_INSTALL_DIR>\python3\python.exe" -m pip install -r "%APPDATA%\Hex-Rays\IDA Pro\plugins\IDAssist\requirements.txt"
 ```
 
 > Replace `<IDA_INSTALL_DIR>` with your IDA Pro installation path (e.g., `/opt/idapro-9.0` or `C:\Program Files\IDA Pro 9.0`).
-
-Then copy `idassist_plugin.py` and the `src/` directory to your IDA plugins folder:
-
-```bash
-cp idassist_plugin.py ~/.idapro/plugins/
-cp -r src ~/.idapro/plugins/
-```
-
-**Option C: Symlink** (recommended for development)
-
-Install Python dependencies as described in Option B, then create file-level symlinks so you can edit the source in place:
-
-**Linux / macOS:**
-```bash
-ln -s /path/to/IDAssist/idassist_plugin.py ~/.idapro/plugins/idassist_plugin.py
-ln -s /path/to/IDAssist/src ~/.idapro/plugins/src
-```
-
-**Windows (requires Administrator or Developer Mode):**
-```cmd
-mklink "%APPDATA%\Hex-Rays\IDA Pro\plugins\idassist_plugin.py" "C:\path\to\IDAssist\idassist_plugin.py"
-mklink /D "%APPDATA%\Hex-Rays\IDA Pro\plugins\src" "C:\path\to\IDAssist\src"
-```
-
-> **Tip:** You can also set the `IDAUSR` environment variable to a custom directory containing a `plugins/` subdirectory with these symlinks.
-
-> **Note:** Use file-level symlinks, not directory symlinks. IDA discovers plugins by scanning `~/.idapro/plugins/` for `.py` files containing a `PLUGIN_ENTRY()` function.
+>
+> **Tip:** You can also set the `IDAUSR` environment variable to a custom directory containing a `plugins/` subdirectory.
 
 ### Step 2: Verify Installation
 
