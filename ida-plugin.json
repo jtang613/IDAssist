@@ -15,6 +15,9 @@
         "email": "jason.tang@badc0ded.net"
       }
     ],
+    "categories": ["integration-with-third-parties-interoperability", "api-scripting-and-automation"],
+    "idaVersions": ["9.0", "9.0sp1", "9.1", "9.2", "9.3", "9.4"],
+    "logoPath": "docs/screenshots/icon.png",
     "keywords": ["llm", "ai", "reverse-engineering", "analysis", "knowledge-graph", "symgraph"],
     "pythonDependencies": [
       "openai",
