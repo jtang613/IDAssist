@@ -186,6 +186,12 @@ class QueryTabView(QWidget):
         self.query_editor.setPlainText(self.markdown_content)
         self.query_editor.hide()  # Hidden by default
 
+        # ESC key discards edits and returns to view mode
+        from PySide6.QtGui import QShortcut
+        esc_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self.query_editor)
+        esc_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+        esc_shortcut.activated.connect(self.cancel_edit_mode)
+
     def create_history_table(self):
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(2)
@@ -292,6 +298,21 @@ class QueryTabView(QWidget):
             self.splitter.setSizes([active_size, 0, history_size, input_size])
 
         self.edit_mode_changed.emit(self.is_edit_mode)
+
+    def cancel_edit_mode(self):
+        """Discard edits and return to view mode without saving"""
+        if not self.is_edit_mode:
+            return
+        self.is_edit_mode = False
+        old_sizes = self.splitter.sizes()
+        history_size = old_sizes[2] if len(old_sizes) >= 3 else 80
+        input_size = old_sizes[3] if len(old_sizes) >= 4 else 100
+        self.query_editor.hide()
+        self.query_browser.show()
+        self.edit_save_button.setText("Edit")
+        total = sum(self.splitter.sizes())
+        active_size = total - history_size - input_size
+        self.splitter.setSizes([active_size, 0, history_size, input_size])
 
     def on_submit_clicked(self):
         """Handle submit button click - toggles between submit and stop"""

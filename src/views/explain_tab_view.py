@@ -175,6 +175,12 @@ class ExplainTabView(QWidget):
         self.explain_editor.setPlainText(self.markdown_content)
         self.explain_editor.hide()  # Hidden by default
 
+        # ESC key discards edits and returns to view mode
+        from PySide6.QtGui import QShortcut
+        esc_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self.explain_editor)
+        esc_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+        esc_shortcut.activated.connect(self.cancel_edit_mode)
+
     def create_line_explanation_panel(self):
         """Create the line explanation panel (collapsible, dismissable)"""
         self.line_explanation_group = QGroupBox("Line Explanation")
@@ -303,6 +309,24 @@ class ExplainTabView(QWidget):
         QTimer.singleShot(0, _restore_sizes)
 
         self.edit_mode_changed.emit(self.is_edit_mode)
+
+    def cancel_edit_mode(self):
+        """Discard edits and return to view mode without saving"""
+        if not self.is_edit_mode:
+            return
+        self.is_edit_mode = False
+        old_sizes = self.main_splitter.sizes()
+        security_size = old_sizes[3] if len(old_sizes) >= 4 else 0
+        line_size = old_sizes[2] if len(old_sizes) >= 3 else 0
+        self.explain_editor.hide()
+        self.explain_browser.show()
+        self.edit_save_button.setText("Edit")
+        from PySide6.QtCore import QTimer
+        def _restore_sizes():
+            total = sum(self.main_splitter.sizes())
+            active_size = total - line_size - security_size
+            self.main_splitter.setSizes([active_size, 0, line_size, security_size])
+        QTimer.singleShot(0, _restore_sizes)
 
     def set_current_offset(self, offset_hex):
         """Update the displayed current offset"""

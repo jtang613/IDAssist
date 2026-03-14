@@ -2550,7 +2550,52 @@ Tool Usage Guidelines:
             
             # NOTE: Assistant message with tool calls and tool results are now loaded from native storage above
             # No need to manually add them again - that would cause duplicates
-            
+
+            # Validate: ensure tool results have a preceding assistant message with tool_calls.
+            # If the native_message_callback didn't fire (e.g. non-streaming fallback for
+            # thinking+tools models), the assistant message may be missing from storage.
+            has_assistant_with_tools = any(
+                msg.get("role") == "assistant" and (
+                    msg.get("tool_calls") or
+                    (isinstance(msg.get("content"), list) and
+                     any(isinstance(b, dict) and b.get("type") == "tool_use" for b in msg["content"]))
+                )
+                for msg in conversation_messages
+            )
+            has_tool_results = any(
+                msg.get("role") == "tool" or
+                (msg.get("role") == "user" and isinstance(msg.get("content"), list) and
+                 any(isinstance(b, dict) and b.get("type") == "tool_result" for b in msg["content"]))
+                for msg in conversation_messages
+            )
+
+            if has_tool_results and not has_assistant_with_tools and tool_calls:
+                log.log_warn(
+                    "Native storage missing assistant message with tool_calls. "
+                    "Reconstructing to prevent API error."
+                )
+                assistant_tool_calls = []
+                for tc in tool_calls:
+                    args = tc.arguments if isinstance(tc.arguments, str) else json.dumps(tc.arguments)
+                    assistant_tool_calls.append({
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.name, "arguments": args}
+                    })
+                # Insert before the first tool result message
+                insert_idx = next(
+                    (i for i, msg in enumerate(conversation_messages)
+                     if msg.get("role") == "tool" or
+                     (msg.get("role") == "user" and isinstance(msg.get("content"), list) and
+                      any(isinstance(b, dict) and b.get("type") == "tool_result" for b in msg["content"]))),
+                    len(conversation_messages)
+                )
+                conversation_messages.insert(insert_idx, {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": assistant_tool_calls
+                })
+
             return conversation_messages
             
         except Exception as e:

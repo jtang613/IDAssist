@@ -873,8 +873,11 @@ class SecurityAnalysisWorker(QThread):
             if self._cancelled or (self._analyzer and self._analyzer.cancelled):
                 self.cancelled.emit()
                 return
-            edges_created = len(paths)
-            self.completed.emit(len(paths), edges_created)
+            vuln_via_edges = self._analyzer.create_vulnerable_via_edges()
+            if self._cancelled or (self._analyzer and self._analyzer.cancelled):
+                self.cancelled.emit()
+                return
+            self.completed.emit(len(paths), vuln_via_edges)
         except Exception as exc:
             self.failed.emit(str(exc))
 
