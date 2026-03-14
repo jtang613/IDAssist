@@ -27,7 +27,16 @@ PLUGIN_NAME = "IDAssist"
 PLUGIN_HOTKEY = "Ctrl+Shift+A"
 PLUGIN_COMMENT = "LLM-assisted reverse engineering"
 PLUGIN_HELP = "Opens the IDAssist panel for AI-powered binary analysis"
-PLUGIN_VERSION = "1.0.0"
+def _load_version():
+    import json
+    try:
+        meta_path = os.path.join(_PLUGIN_DIR, "ida-plugin.json")
+        with open(meta_path, "r") as f:
+            return json.load(f)["plugin"]["version"]
+    except Exception:
+        return "0.0.0"
+
+PLUGIN_VERSION = _load_version()
 
 
 # ---------------------------------------------------------------------------
@@ -198,8 +207,19 @@ class IDAssistPlugin(idaapi.plugin_t):
     def init(self):
         """Called when IDA loads the plugin. Return PLUGIN_KEEP to stay resident."""
         try:
-            from src.ida_compat import log
+            from src.ida_compat import log, check_qt_environment
             log.log_info(f"IDAssist v{PLUGIN_VERSION} loaded")
+
+            # Validate Qt environment
+            self._qt_ok = True
+            self._qt_diag = ""
+            qt_ok, qt_diag = check_qt_environment()
+            if qt_ok:
+                log.log_info(f"Qt env: {qt_diag}")
+            else:
+                log.log_error(f"Qt environment check failed: {qt_diag}")
+                self._qt_ok = False
+                self._qt_diag = qt_diag
 
             # Register context menu actions
             self._register_actions()
@@ -256,6 +276,12 @@ class IDAssistPlugin(idaapi.plugin_t):
 
     def run(self, arg):
         """Called when the user activates the plugin (hotkey or menu)."""
+        if not self._qt_ok:
+            ida_kernwin.warning(
+                f"IDAssist: Qt environment is not usable.\n\n{self._qt_diag}\n\n"
+                "The UI cannot be opened. Check IDA's output window for details."
+            )
+            return
         try:
             from src.views.idassist_form import IDAssistForm
             IDAssistForm.open()

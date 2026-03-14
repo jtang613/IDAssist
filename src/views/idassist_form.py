@@ -87,6 +87,12 @@ class IDAssistForm(idaapi.PluginForm):
 
     def OnCreate(self, form):
         """Called by IDA when the form is first created."""
+        from src.ida_compat import check_qt_platform_plugins
+        ok, err = check_qt_platform_plugins()
+        if not ok:
+            log.log_error(f"Qt platform plugins missing, cannot create UI: {err}")
+            return
+
         try:
             from PySide6.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
