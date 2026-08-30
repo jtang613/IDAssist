@@ -6,6 +6,22 @@ Consumer files should use explicit imports:
     from ..qt_compat import QWidget, Signal, exec_dialog, ...
 """
 
+def _binding_exports(*modules):
+    """Collect public Qt names without relying on binding ``import *`` rules.
+
+    Some PySide6 builds used by IDA with Python 3.14 do not expose all of
+    QtCore/QtGui/QtWidgets through wildcard imports.  Named attributes remain
+    available on the modules, so exporting them explicitly keeps the shim
+    stable across IDA's Qt builds.
+    """
+    exports = {}
+    for module in modules:
+        for name in dir(module):
+            if not name.startswith("_") and name not in exports:
+                exports[name] = getattr(module, name)
+    return exports
+
+
 try:
     # PySide6 6.8.0 contains a known crash bug (spyder-ide/qtpy#494).
     # Read the version from package metadata (no import needed) and skip
@@ -17,18 +33,22 @@ try:
     except Exception as _e:
         if "6.8.0" in str(_e):
             raise
-    from PySide6.QtCore import *      # noqa: F401,F403
-    from PySide6.QtGui import *       # noqa: F401,F403
-    from PySide6.QtWidgets import *   # noqa: F401,F403
-    from PySide6.QtCore import Signal
-    from PySide6.QtGui import QAction
+    from PySide6 import QtCore as _QtCore
+    from PySide6 import QtGui as _QtGui
+    from PySide6 import QtWidgets as _QtWidgets
+
+    globals().update(_binding_exports(_QtCore, _QtGui, _QtWidgets))
+    Signal = _QtCore.Signal
+    QAction = _QtGui.QAction
     QT_BINDING = "PySide6"
 except ImportError:
-    from PyQt5.QtCore import *        # noqa: F401,F403
-    from PyQt5.QtGui import *         # noqa: F401,F403
-    from PyQt5.QtWidgets import *     # noqa: F401,F403
-    from PyQt5.QtCore import pyqtSignal as Signal  # noqa: F401
-    from PyQt5.QtWidgets import QAction  # noqa: F401
+    from PyQt5 import QtCore as _QtCore
+    from PyQt5 import QtGui as _QtGui
+    from PyQt5 import QtWidgets as _QtWidgets
+
+    globals().update(_binding_exports(_QtCore, _QtGui, _QtWidgets))
+    Signal = _QtCore.pyqtSignal
+    QAction = _QtWidgets.QAction
     QT_BINDING = "PyQt5"
 
 QT_AVAILABLE = QT_BINDING is not None

@@ -4,9 +4,10 @@ import asyncio
 import json
 import os
 import shlex
+from ..daemon_worker import DaemonWorker
 from ..qt_compat import (QMessageBox, QInputDialog, QDialog, QVBoxLayout, QHBoxLayout,
                          QLabel, QLineEdit, QPushButton, QCheckBox, QSpinBox, QComboBox,
-                         QObject, QThread, Signal, exec_dialog)
+                         QObject, Signal, exec_dialog)
 
 from src.ida_compat import log
 
@@ -149,7 +150,7 @@ def validate_provider_model_fetch_config(provider_config):
     return None
 
 
-class ProviderTestWorker(QThread):
+class ProviderTestWorker(DaemonWorker):
     """Worker thread for testing provider connectivity"""
 
     test_completed = Signal(bool, str)
@@ -172,10 +173,12 @@ class ProviderTestWorker(QThread):
 
             try:
                 worker_timeout = get_provider_worker_timeout_seconds(self.provider_config)
-                success, message = loop.run_until_complete(
-                    asyncio.wait_for(self._test_provider(), timeout=worker_timeout)
-                )
+                task = loop.create_task(self._test_provider())
+                self._set_async_task(loop, task)
+                success, message = self.run_async_task(loop, task, worker_timeout)
 
+                if self.isInterruptionRequested():
+                    return
                 if success:
                     log.log_info(f"Provider test successful for '{provider_name}'")
                 else:
@@ -188,11 +191,15 @@ class ProviderTestWorker(QThread):
                 log.log_warn(f"Provider test timeout for '{provider_name}' after {worker_timeout} seconds")
                 self.test_completed.emit(False, f"Test timeout after {worker_timeout} seconds")
 
+            except asyncio.CancelledError:
+                log.log_info(f"Provider test cancelled for '{provider_name}'")
+
             except Exception as e:
                 log.log_error(f"Provider test execution failed for '{provider_name}': {e}")
                 self.test_completed.emit(False, f"Test execution error: {str(e)}")
 
             finally:
+                self._clear_async_task()
                 try:
                     pending = asyncio.all_tasks(loop)
                     if pending:
@@ -258,7 +265,7 @@ class ProviderTestWorker(QThread):
             pass
 
 
-class ProviderModelFetchWorker(QThread):
+class ProviderModelFetchWorker(DaemonWorker):
     """Worker thread for provider model discovery."""
 
     fetch_completed = Signal(object)
@@ -279,9 +286,9 @@ class ProviderModelFetchWorker(QThread):
 
             try:
                 worker_timeout = get_provider_worker_timeout_seconds(self.provider_config)
-                result = loop.run_until_complete(
-                    asyncio.wait_for(self._fetch_models(), timeout=worker_timeout)
-                )
+                task = loop.create_task(self._fetch_models())
+                self._set_async_task(loop, task)
+                result = self.run_async_task(loop, task, worker_timeout)
                 if not self.isInterruptionRequested():
                     self.fetch_completed.emit(result)
 
@@ -295,6 +302,9 @@ class ProviderModelFetchWorker(QThread):
                         )
                     )
 
+            except asyncio.CancelledError:
+                log.log_info(f"Model discovery cancelled for '{provider_name}'")
+
             except Exception as e:
                 from ..services.models.llm_models import ProviderModelDiscoveryResult
                 log.log_error(f"Model discovery failed for '{provider_name}': {e}")
@@ -306,6 +316,7 @@ class ProviderModelFetchWorker(QThread):
                     )
 
             finally:
+                self._clear_async_task()
                 try:
                     pending = asyncio.all_tasks(loop)
                     if pending:
@@ -343,7 +354,7 @@ class ProviderModelFetchWorker(QThread):
         return await llm_service.discover_provider_models(self.provider_config)
 
 
-class MCPTestWorker(QThread):
+class MCPTestWorker(DaemonWorker):
     """Worker thread for testing MCP server connectivity"""
 
     test_completed = Signal(bool, str, dict)
@@ -415,7 +426,7 @@ class MCPTestWorker(QThread):
             self.test_completed.emit(False, error_message, {})
 
 
-class SymGraphTestWorker(QThread):
+class SymGraphTestWorker(DaemonWorker):
     """Worker thread for testing SymGraph API connectivity"""
 
     test_completed = Signal(bool, str)
@@ -432,10 +443,12 @@ class SymGraphTestWorker(QThread):
             asyncio.set_event_loop(loop)
 
             try:
-                success, message = loop.run_until_complete(
-                    asyncio.wait_for(self._test_symgraph(), timeout=15.0)
-                )
+                task = loop.create_task(self._test_symgraph())
+                self._set_async_task(loop, task)
+                success, message = self.run_async_task(loop, task, 15.0)
 
+                if self.isInterruptionRequested():
+                    return
                 if success:
                     log.log_info("SymGraph API test successful")
                 else:
@@ -447,11 +460,15 @@ class SymGraphTestWorker(QThread):
                 log.log_warn("SymGraph API test timeout after 15 seconds")
                 self.test_completed.emit(False, "Test timeout after 15 seconds")
 
+            except asyncio.CancelledError:
+                log.log_info("SymGraph API test cancelled")
+
             except Exception as e:
                 log.log_error(f"SymGraph API test execution failed: {e}")
                 self.test_completed.emit(False, f"Test execution error: {str(e)}")
 
             finally:
+                self._clear_async_task()
                 try:
                     pending = asyncio.all_tasks(loop)
                     if pending:
@@ -1568,9 +1585,27 @@ class SettingsController(QObject):
         self.view = settings_view
         self.service = settings_service
         self.mcp_service = MCPClientService()
+        self.test_worker = None
+        self.mcp_test_worker = None
+        self.symgraph_test_worker = None
 
         self.connect_signals()
         self.load_initial_data()
+
+    def shutdown(self):
+        """Cancel settings workers before their owning panel is destroyed."""
+        for attr_name in ('test_worker', 'mcp_test_worker', 'symgraph_test_worker'):
+            worker = getattr(self, attr_name, None)
+            if worker is None:
+                continue
+            try:
+                if worker.isRunning():
+                    worker.requestInterruption()
+                    worker.quit()
+                    worker.wait(2000)
+            except RuntimeError:
+                pass
+            setattr(self, attr_name, None)
 
     def _invalidate_llm_provider_cache(self, provider_name=None):
         """Invalidate cached LLM providers after provider config changes."""
@@ -1815,10 +1850,11 @@ class SettingsController(QObject):
             self.view.set_llm_test_status('failure', message)
 
     def cancel_llm_test(self):
-        if hasattr(self, 'test_worker') and self.test_worker and self.test_worker.isRunning():
+        if self.test_worker and self.test_worker.isRunning():
             self.test_worker.requestInterruption()
             self.test_worker.quit()
             self.test_worker.wait(2000)
+        self.test_worker = None
         self.view.set_llm_test_enabled(True)
         self.view.set_llm_test_status('failure', 'Test cancelled by user')
 
@@ -1997,10 +2033,11 @@ class SettingsController(QObject):
             self.view.set_mcp_test_status('failure', message)
 
     def cancel_mcp_test(self):
-        if hasattr(self, 'mcp_test_worker') and self.mcp_test_worker and self.mcp_test_worker.isRunning():
+        if self.mcp_test_worker and self.mcp_test_worker.isRunning():
             self.mcp_test_worker.requestInterruption()
             self.mcp_test_worker.quit()
             self.mcp_test_worker.wait(2000)
+        self.mcp_test_worker = None
         self.view.set_mcp_test_enabled(True)
         self.view.set_mcp_test_status('failure', 'Test cancelled by user')
 
@@ -2057,10 +2094,11 @@ class SettingsController(QObject):
             self.view.set_symgraph_test_status('failure', message)
 
     def cancel_symgraph_test(self):
-        if hasattr(self, 'symgraph_test_worker') and self.symgraph_test_worker and self.symgraph_test_worker.isRunning():
+        if self.symgraph_test_worker and self.symgraph_test_worker.isRunning():
             self.symgraph_test_worker.requestInterruption()
             self.symgraph_test_worker.quit()
             self.symgraph_test_worker.wait(2000)
+        self.symgraph_test_worker = None
         self.view.set_symgraph_test_enabled(True)
         self.view.set_symgraph_test_status('failure', 'Test cancelled by user')
 

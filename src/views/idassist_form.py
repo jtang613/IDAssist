@@ -284,6 +284,10 @@ class IDAssistForm(idaapi.PluginForm):
     def OnClose(self, form):
         """Called by IDA when the form is closed."""
         try:
+            settings_controller = getattr(self, 'settings_controller', None)
+            if settings_controller is not None:
+                settings_controller.shutdown()
+
             # Unhook UI hooks
             if IDAssistForm._ui_hooks is not None:
                 IDAssistForm._ui_hooks.unhook()

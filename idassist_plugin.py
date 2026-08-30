@@ -276,6 +276,14 @@ class IDAssistPlugin(idaapi.plugin_t):
     def term(self):
         """Called when IDA is shutting down."""
         try:
+            # Stop settings/network workers while their Qt owners are valid.
+            from src.views.idassist_form import IDAssistForm
+            form = IDAssistForm._instance
+            if form is not None:
+                settings_controller = getattr(form, 'settings_controller', None)
+                if settings_controller is not None:
+                    settings_controller.shutdown()
+
             # Unregister actions
             for action_id in ["idassist:explain_function",
                               "idassist:rename_suggestions",

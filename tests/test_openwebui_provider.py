@@ -1,9 +1,10 @@
 """Tests for OpenWebUI provider URL and transport handling."""
 
+import asyncio
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -96,6 +97,13 @@ class TestOpenWebUIProvider(unittest.TestCase):
 
         provider, _, _ = self._create_provider(self._config(model="gpt-5"))
         self.assertTrue(provider._is_reasoning_model())
+
+    def test_empty_completion_still_proves_connectivity(self):
+        """A valid empty local-model response is not a connection failure."""
+        provider, _, _ = self._create_provider(self._config())
+        provider.chat_completion = AsyncMock(return_value=Mock(content=""))
+
+        self.assertTrue(asyncio.run(provider.test_connection()))
 
     def test_factory_registration(self):
         """The main factory registers OpenWebUI with its dedicated provider."""

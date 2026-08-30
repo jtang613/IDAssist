@@ -583,8 +583,14 @@ class OpenAIPlatformApiProvider(BaseLLMProvider):
                 temperature=0.1
             )
 
-            response = await self.chat_completion(test_request)
-            return bool(response.content)
+            # Reaching this point means the configured endpoint accepted the
+            # request and returned a structurally valid completion.  Some
+            # OpenAI-compatible local models legitimately return an empty
+            # content field when a very small token budget is consumed by
+            # reasoning, or when the finish reason is ``length``.  That is a
+            # model-output concern, not a failed connection.
+            await self.chat_completion(test_request)
+            return True
 
         except Exception as e:
             log.log_error(f"OpenAI connection test failed: {e}")
